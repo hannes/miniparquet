@@ -33,15 +33,15 @@ int main(int argc, char * const argv[]) {
 				for (auto& col : rc.cols) {
 					switch (col.type) {
 					case parquet::format::Type::BOOLEAN:
-						printf("%s\t",
-								((bool*) col.data.ptr)[row] ? "TRUE" : "FALSE");
+						printf("%s",
+								((bool*) col.data.ptr)[row] ? "True" : "False");
 						break;
 
 					case parquet::format::Type::INT32:
-						printf("%d\t", ((int32_t*) col.data.ptr)[row]);
+						printf("%d", ((int32_t*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::INT64:
-						printf("%lld\t", ((int64_t*) col.data.ptr)[row]);
+						printf("%lld", ((int64_t*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::INT96: {
 						auto val = ((Int96*) col.data.ptr)[row];
@@ -49,23 +49,26 @@ int main(int argc, char * const argv[]) {
 								/ 1000000000;
 						char buffer[80];
 						strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", gmtime(&a));
-						printf("%s\t", buffer);
+						printf("%s", buffer);
 						break;
 					}
 					case parquet::format::Type::FLOAT:
-						printf("%f\t", ((float*) col.data.ptr)[row]);
+						printf("%f", ((float*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::DOUBLE:
-						printf("%lf\t", ((double*) col.data.ptr)[row]);
+						printf("%lf", ((double*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::BYTE_ARRAY:
-						printf("%s\t",
+						printf("%s",
 								col.string_heap[((uint64_t*) col.data.ptr)[row]].get());
 						break;
 					default:
 						throw runtime_error("Invalid type");
 						break;
 
+					}
+					if (col.id < rc.cols.size()-1) {
+						printf("\t");
 					}
 
 				}

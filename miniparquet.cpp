@@ -82,6 +82,9 @@ void ParquetFile::initialize(string filename) {
 	thrift_unpack((const uint8_t*) buf.ptr, (uint32_t*) &footer_len,
 			&file_meta_data);
 
+//	file_meta_data.printTo(cout);
+//	cout << "\n";
+
 	if (file_meta_data.__isset.encryption_algorithm) {
 		throw runtime_error("Encrypted Parquet files are not supported");
 	}
@@ -95,8 +98,7 @@ void ParquetFile::initialize(string filename) {
 		throw runtime_error("Only flat tables are supported (no nesting)");
 	}
 
-//	file_meta_data.printTo(cout);
-//	cout << "\n";
+
 
 // skip the first column its the root and otherwise useless
 	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size();
