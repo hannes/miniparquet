@@ -22,6 +22,9 @@ using namespace miniparquet;
 
 static TCompactProtocolFactoryT<TMemoryBuffer> tproto_factory;
 
+
+
+
 template<class T>
 static void thrift_unpack(const uint8_t* buf, uint32_t* len,
 		T* deserialized_msg) {
@@ -92,10 +95,14 @@ void ParquetFile::initialize(string filename) {
 		throw runtime_error("Only flat tables are supported (no nesting)");
 	}
 
-	// skip the first column its the root and otherwise useless
+//	file_meta_data.printTo(cout);
+//	cout << "\n";
+
+// skip the first column its the root and otherwise useless
 	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size();
 			col_idx++) {
 		auto s_ele = file_meta_data.schema[col_idx];
+
 		if (!s_ele.__isset.type || s_ele.num_children > 0) {
 			throw runtime_error("Only flat tables are supported (no nesting)");
 		}
@@ -116,7 +123,7 @@ void ParquetFile::initialize(string filename) {
 	this->nrow = file_meta_data.num_rows;
 }
 
-// TODO this is sub-optimal because it always starts from scratch
+// TODO this is slow because it always starts from scratch, reimplement with state
 static int64_t bitunpack_rev(char* source, uint64_t *source_offset,
 		uint8_t encoding_length) {
 	if (encoding_length > 64) {
@@ -154,9 +161,14 @@ static uint64_t varint_decode(char* source, uint8_t *len_out) {
  * Boolean values in data pages, as an alternative to PLAIN encoding
  */
 
+
 // todo bit-packed-run-len and rle-run-len must be in the range [1, 2^31 - 1].
 static void decode_bprle(char* payload_ptr, size_t payload_len,
 		uint8_t value_width, uint32_t result[], uint32_t result_len) {
+
+	if (value_width < 1 || value_width > 32) {
+		throw runtime_error("Value width needs to be in [1, 32]");
+	}
 	auto val_null_idx = 0;
 	auto rle_ptr = payload_ptr;
 	auto rle_payload_len = ((value_width + 7) / 8);
@@ -169,6 +181,7 @@ static void decode_bprle(char* payload_ptr, size_t payload_len,
 		if (val_null_idx >= result_len) {
 			return;
 		}
+
 		// we varint-decode the run header to find out whether its bit packed or rle. weird flex but ok.
 		uint8_t rle_header_len = 0;
 		auto rle_header = varint_decode(rle_ptr, &rle_header_len);
@@ -298,7 +311,6 @@ public:
 			fill_dict<double>();
 			break;
 		case Type::BYTE_ARRAY:
-
 			// no dict here we use the result set string heap directly
 
 			for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
@@ -430,9 +442,9 @@ public:
 				s[str_len] = '\0';
 				result_col.string_heap.push_back(move(s));
 
-				((uint64_t*)result_col.data.ptr)[row_idx] = result_col.string_heap.size()-1;
+				((uint64_t*) result_col.data.ptr)[row_idx] =
+						result_col.string_heap.size() - 1;
 				page_buf_ptr += str_len;
-
 
 			}
 			break;
@@ -537,6 +549,9 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	auto& row_group = file_meta_data.row_groups[state.row_group_idx];
 	auto& chunk = row_group.columns[result_col.id];
 
+//	chunk.printTo(cout);
+//	cout << "\n";
+
 	if (chunk.__isset.file_path) {
 		throw runtime_error(
 				"Only inlined data files are supported (no references)");
@@ -551,7 +566,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	if (chunk.meta_data.__isset.dictionary_page_offset
 			&& chunk.meta_data.dictionary_page_offset >= 4) {
 		// this assumes the data pages follow the dict pages directly.
-		// TODO verify this
+		// TODO verify this?
 		chunk_start = chunk.meta_data.dictionary_page_offset;
 	}
 	auto chunk_len = chunk.meta_data.total_compressed_size;
@@ -577,7 +592,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		cs.page_header = PageHeader();
 		thrift_unpack((const uint8_t*) chunk_buf.ptr,
 				(uint32_t*) &page_header_len, &cs.page_header);
-//
+
 //		cs.page_header.printTo(cout);
 //		printf("\n");
 
@@ -597,16 +612,17 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 
 			break;
 		case CompressionCodec::SNAPPY: {
-			decompressed_buf.resize(cs.page_header.uncompressed_page_size);
 			auto res = snappy::Uncompress(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, &decompressed_buf);
-			if (!res) {
+			if (!res
+					|| decompressed_buf.size()
+							!= cs.page_header.uncompressed_page_size) {
 				throw runtime_error("Decompression failure");
 			}
+
 			cs.page_buf_ptr = (char*) decompressed_buf.c_str();
 			cs.page_buf_len = cs.page_header.uncompressed_page_size;
 
-			// TODO make sure the amount of bits snappy decommpressed correspond with uncompressed size
 			break;
 		}
 		default:
@@ -670,7 +686,6 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 }
 
 bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
-
 	if (s.row_group_idx >= file_meta_data.row_groups.size()) {
 		result.nrows = 0;
 		return false;
@@ -678,7 +693,6 @@ bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
 
 	auto& row_group = file_meta_data.row_groups[s.row_group_idx];
 	result.nrows = row_group.num_rows;
-	// TODO check row group index
 
 	for (auto& result_col : result.cols) {
 		initialize_column(result_col, row_group.num_rows);

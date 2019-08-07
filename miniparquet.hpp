@@ -39,7 +39,6 @@ class ByteBuffer { // on to the 10 thousandth impl
 public:
 	char* ptr = nullptr;
 	uint64_t len = 0;
-	uint64_t pos = 0;
 
 	void resize(uint64_t new_size) {
 		if (new_size > len) {

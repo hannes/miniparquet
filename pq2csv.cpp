@@ -5,6 +5,19 @@
 using namespace miniparquet;
 using namespace std;
 
+// surely they are joking
+constexpr int64_t kJulianToUnixEpochDays = 2440588LL;
+constexpr int64_t kMillisecondsInADay = 86400000LL;
+constexpr int64_t kNanosecondsInADay = kMillisecondsInADay * 1000LL * 1000LL;
+
+static int64_t impala_timestamp_to_nanoseconds(const Int96& impala_timestamp) {
+	int64_t days_since_epoch = impala_timestamp.value[2]
+			- kJulianToUnixEpochDays;
+	int64_t nanoseconds =
+			*(reinterpret_cast<const int64_t*>(&(impala_timestamp.value)));
+	return days_since_epoch * kNanosecondsInADay + nanoseconds;
+}
+
 int main(int argc, char * const argv[]) {
 
 	for (int arg = 1; arg < argc; arg++) {
@@ -15,33 +28,45 @@ int main(int argc, char * const argv[]) {
 
 		f.initialize_result(rc);
 
-		while(f.scan(s, rc)) {
+		while (f.scan(s, rc)) {
 			for (uint64_t row = 0; row < rc.nrows; row++) {
-				for (auto& col: rc.cols) {
-					switch(col.type) {
+				for (auto& col : rc.cols) {
+					switch (col.type) {
 					case parquet::format::Type::BOOLEAN:
-						printf("%s\t", ((bool*)col.data.get())[row] ? "TRUE" : "FALSE");
+						printf("%s\t",
+								((bool*) col.data.ptr)[row] ? "TRUE" : "FALSE");
 						break;
 
 					case parquet::format::Type::INT32:
-						printf("%d\t", ((int32_t*)col.data.get())[row]);
+						printf("%d\t", ((int32_t*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::INT64:
-						printf("%lld\t", ((int64_t*)col.data.get())[row]);
+						printf("%lld\t", ((int64_t*) col.data.ptr)[row]);
 						break;
+					case parquet::format::Type::INT96: {
+						auto val = ((Int96*) col.data.ptr)[row];
+						time_t a = impala_timestamp_to_nanoseconds(val)
+								/ 1000000000;
+						char buffer[80];
+						strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", gmtime(&a));
+						printf("%s\t", buffer);
+						break;
+					}
 					case parquet::format::Type::FLOAT:
-						printf("%f\t", ((float*)col.data.get())[row]);
+						printf("%f\t", ((float*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::DOUBLE:
-						printf("%lf\t", ((double*)col.data.get())[row]);
+						printf("%lf\t", ((double*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::BYTE_ARRAY:
-						printf("%s\t", ((char**)col.data.get())[row]);
+						printf("%s\t",
+								col.string_heap[((uint64_t*) col.data.ptr)[row]].get());
+						break;
+					default:
+						throw runtime_error("Invalid type");
 						break;
 
-
 					}
-
 
 				}
 				printf("\n");
