@@ -10,8 +10,6 @@
 #include <protocol/TCompactProtocol.h>
 #include <transport/TBufferTransports.h>
 
-using ThriftBuffer = apache::thrift::transport::TMemoryBuffer;
-
 using namespace std;
 
 using namespace parquet;
@@ -22,13 +20,13 @@ using namespace apache::thrift::transport;
 
 using namespace miniparquet;
 
-static TCompactProtocolFactoryT<ThriftBuffer> tproto_factory;
+static TCompactProtocolFactoryT<TMemoryBuffer> tproto_factory;
 
 template<class T>
 static void thrift_unpack(const uint8_t* buf, uint32_t* len,
 		T* deserialized_msg) {
-	shared_ptr<ThriftBuffer> tmem_transport(
-			new ThriftBuffer(const_cast<uint8_t*>(buf), *len));
+	shared_ptr<TMemoryBuffer> tmem_transport(
+			new TMemoryBuffer(const_cast<uint8_t*>(buf), *len));
 	shared_ptr<TProtocol> tproto = tproto_factory.getProtocol(tmem_transport);
 	try {
 		deserialized_msg->read(tproto.get());
@@ -41,50 +39,44 @@ static void thrift_unpack(const uint8_t* buf, uint32_t* len,
 	*len = *len - bytes_left;
 }
 
-void ScanState::resize_buf(uint64_t new_size) {
-	read_buf_holder = unique_ptr<char[]>(new char[new_size]);
-	read_buf = read_buf_holder.get();
-	read_buf_size = new_size;
-}
-
 ParquetFile::ParquetFile(std::string filename) {
 	initialize(filename);
 }
 
 void ParquetFile::initialize(string filename) {
-	ScanState s;
+	ByteBuffer buf;
 
 	pfile = ifstream(filename, std::ios::binary);
-	s.resize_buf(4);
+	buf.resize(4);
 	// check for magic bytes at start of file
-	pfile.read(s.read_buf, 4);
-	if (strncmp(s.read_buf, "PAR1", 4) != 0) {
+	pfile.read(buf.ptr, 4);
+	if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 		throw runtime_error("No magic bytes found at beginning of file");
 	}
 
 	// check for magic bytes at end of file
 	pfile.seekg(-4, ios_base::end);
-	pfile.read(s.read_buf, 4);
-	if (strncmp(s.read_buf, "PAR1", 4) != 0) {
+	pfile.read(buf.ptr, 4);
+	if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 		throw runtime_error("No magic bytes found at end of file");
 	}
 
 	// read four-byte footer length from just before the end magic bytes
 	pfile.seekg(-8, ios_base::end);
-	pfile.read(s.read_buf, 4);
-	int32_t footer_len = *(uint32_t*) s.read_buf;
+	pfile.read(buf.ptr, 4);
+	int32_t footer_len = *(uint32_t*) buf.ptr;
 	if (footer_len == 0) {
 		throw runtime_error("Footer length can't be 0");
 	}
 
 	// read footer into buffer and de-thrift
-	s.resize_buf(footer_len);
+	buf.resize(footer_len);
 	pfile.seekg(-(footer_len + 8), ios_base::end);
-	pfile.read(s.read_buf, footer_len);
+	pfile.read(buf.ptr, footer_len);
 	if (!pfile) {
 		throw runtime_error("Could not read footer");
 	}
-	thrift_unpack((const uint8_t*) s.read_buf, (uint32_t*) &footer_len,
+	thrift_unpack((const uint8_t*) buf.ptr, (uint32_t*) &footer_len,
 			&file_meta_data);
 
 	if (file_meta_data.__isset.encryption_algorithm) {
@@ -107,13 +99,13 @@ void ParquetFile::initialize(string filename) {
 		if (!s_ele.__isset.type || s_ele.num_children > 0) {
 			throw runtime_error("Only flat tables are supported (no nesting)");
 		}
-		// TODO if this is REQUIRED, no defined levels in file
+		// TODO if this is REQUIRED, there are no defined levels in file
 
 		// if field is REPEATED, no bueno
 		if (s_ele.repetition_type != FieldRepetitionType::OPTIONAL) {
 			throw runtime_error("Only OPTIONAL fields support for now");
 		}
-		// TODO scale? precision?
+		// TODO scale? precision? complain if set
 		auto col = unique_ptr<ParquetColumn>(new ParquetColumn());
 		col->id = col_idx - 1;
 		col->name = s_ele.name;
@@ -252,7 +244,7 @@ public:
 	uint64_t page_start_row = 0;
 
 	template<class T>
-	void construct_dictionary() {
+	void fill_dict() {
 		auto dict_size = page_header.dictionary_page_header.num_values;
 		dict = new Dictionary<T>(dict_size);
 		for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
@@ -288,25 +280,26 @@ public:
 		// initialize dictionaries per type
 		switch (result_col.type) {
 		case Type::BOOLEAN:
-			construct_dictionary<bool>();
+			fill_dict<bool>();
 			break;
 		case Type::INT32:
-			construct_dictionary<int32_t>();
+			fill_dict<int32_t>();
 			break;
 		case Type::INT64:
-			construct_dictionary<int64_t>();
+			fill_dict<int64_t>();
 			break;
 		case Type::INT96:
-			construct_dictionary<Int96>();
+			fill_dict<Int96>();
 			break;
 		case Type::FLOAT:
-			construct_dictionary<float>();
+			fill_dict<float>();
 			break;
 		case Type::DOUBLE:
-			construct_dictionary<double>();
+			fill_dict<double>();
 			break;
 		case Type::BYTE_ARRAY:
-			dict = new Dictionary<unique_ptr<char[]>>(dict_size);
+
+			// no dict here we use the result set string heap directly
 
 			for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
 
@@ -321,8 +314,8 @@ public:
 				auto s = std::unique_ptr<char[]>(new char[str_len + 1]);
 				s[str_len] = '\0';
 				memcpy(s.get(), page_buf_ptr, str_len);
-				((Dictionary<unique_ptr<char[]>>*) dict)->dict[dict_index] =
-						move(s);
+				result_col.string_heap.push_back(move(s));
+
 				page_buf_ptr += str_len;
 			}
 
@@ -387,7 +380,7 @@ public:
 	}
 
 	template<class T> void fill_values_plain(ResultColumn& result_col) {
-		T* result_arr = (T*) result_col.data.get();
+		T* result_arr = (T*) result_col.data.ptr;
 		for (int32_t val_offset = 0;
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
@@ -432,18 +425,15 @@ public:
 							"Declared string length exceeds payload size");
 				}
 
-//
-//				if (state.definition_levels[val_offset]) {
-//					auto s = std::unique_ptr<char[]>(new char[str_len + 1]);
-//					s[str_len] = '\0';
-//					memcpy(s.get(), page_buf_ptr, str_len);
-//
-//
-//				}
+				auto s = std::unique_ptr<char[]>(new char[str_len + 1]);
+				memcpy(s.get(), page_buf_ptr, str_len);
+				s[str_len] = '\0';
+				result_col.string_heap.push_back(move(s));
 
-				// TODO put this into the result dict and add reference
-
+				((uint64_t*)result_col.data.ptr)[row_idx] = result_col.string_heap.size()-1;
 				page_buf_ptr += str_len;
+
+
 			}
 			break;
 
@@ -457,8 +447,7 @@ public:
 
 	template<class T> void fill_values_dict(ResultColumn& result_col,
 			uint32_t* offsets) {
-		T* result_arr = (T*) result_col.data.get();
-
+		auto result_arr = (T*) result_col.data.ptr;
 		for (int32_t val_offset = 0;
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
@@ -517,7 +506,8 @@ public:
 			break;
 
 		case Type::BYTE_ARRAY: {
-			char** result_arr = (char**) result_col.data.get();
+			auto result_arr = (uint64_t*) result_col.data.ptr;
+			// TODO we can just copy the offsets here?
 
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
@@ -526,8 +516,8 @@ public:
 				auto offset = offsets[val_offset];
 				auto row_idx = page_start_row + val_offset;
 
-				result_arr[row_idx] =
-						((Dictionary<unique_ptr<char[]>>*) dict)->get(offset).get();
+				// these are direct references to the dict
+				result_arr[row_idx] = offset;
 
 			}
 			break;
@@ -556,26 +546,27 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		throw runtime_error("Only flat tables are supported (no nesting)");
 	}
 
+	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
 	auto chunk_start = chunk.meta_data.data_page_offset;
 	if (chunk.meta_data.__isset.dictionary_page_offset
 			&& chunk.meta_data.dictionary_page_offset >= 4) {
 		// this assumes the data pages follow the dict pages directly.
+		// TODO verify this
 		chunk_start = chunk.meta_data.dictionary_page_offset;
 	}
 	auto chunk_len = chunk.meta_data.total_compressed_size;
 
 	// read entire chunk into RAM
 	pfile.seekg(chunk_start);
-	auto chunk_buf = unique_ptr<char[]>(new char[chunk_len]);
-	auto chunk_buf_ptr = chunk_buf.get();
+	ByteBuffer chunk_buf;
+	chunk_buf.resize(chunk_len);
 
-	pfile.read(chunk_buf.get(), chunk_len);
+	pfile.read(chunk_buf.ptr, chunk_len);
 	if (!pfile) {
 		throw runtime_error("Could not read chunk. File corrupt?");
 	}
 
 	// now we have whole chunk in buffer, proceed to read pages
-
 	ColumnScan cs;
 	auto bytes_to_read = chunk_len;
 
@@ -583,32 +574,31 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		auto page_header_len = bytes_to_read; // the header is clearly not that long but we have no idea
 
 		// this is the only other place where we actually unpack a thrift object
-
 		cs.page_header = PageHeader();
-		thrift_unpack((const uint8_t*) chunk_buf_ptr,
+		thrift_unpack((const uint8_t*) chunk_buf.ptr,
 				(uint32_t*) &page_header_len, &cs.page_header);
-
-		cs.page_header.printTo(cout);
-		printf("\n");
+//
+//		cs.page_header.printTo(cout);
+//		printf("\n");
 
 		// compressed_page_size does not include the header size
-		chunk_buf_ptr += page_header_len;
+		chunk_buf.ptr += page_header_len;
 		bytes_to_read -= page_header_len;
 
-		auto payload_end_ptr = chunk_buf_ptr
+		auto payload_end_ptr = chunk_buf.ptr
 				+ cs.page_header.compressed_page_size;
 
 		string decompressed_buf;
 
 		switch (chunk.meta_data.codec) {
 		case CompressionCodec::UNCOMPRESSED:
-			cs.page_buf_ptr = chunk_buf_ptr;
+			cs.page_buf_ptr = chunk_buf.ptr;
 			cs.page_buf_len = cs.page_header.compressed_page_size;
 
 			break;
 		case CompressionCodec::SNAPPY: {
 			decompressed_buf.resize(cs.page_header.uncompressed_page_size);
-			auto res = snappy::Uncompress(chunk_buf_ptr,
+			auto res = snappy::Uncompress(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, &decompressed_buf);
 			if (!res) {
 				throw runtime_error("Decompression failure");
@@ -616,7 +606,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 			cs.page_buf_ptr = (char*) decompressed_buf.c_str();
 			cs.page_buf_len = cs.page_header.uncompressed_page_size;
 
-			// TODO make sure the amount of bits snappy decommpressed correspnod with uncompressed size
+			// TODO make sure the amount of bits snappy decommpressed correspond with uncompressed size
 			break;
 		}
 		default:
@@ -642,7 +632,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 			break; // ignore INDEX page type and any other custom extensions
 		}
 
-		chunk_buf_ptr = payload_end_ptr;
+		chunk_buf.ptr = payload_end_ptr;
 		bytes_to_read -= cs.page_header.compressed_page_size;
 	}
 }
@@ -653,25 +643,25 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 
 	switch (col.type) {
 	case Type::BOOLEAN:
-		col.data = unique_ptr<char[]>(new char[sizeof(bool) * num_rows]);
+		col.data.resize(sizeof(bool) * num_rows);
 		break;
 	case Type::INT32:
-		col.data = unique_ptr<char[]>(new char[sizeof(int32_t) * num_rows]);
+		col.data.resize(sizeof(int32_t) * num_rows);
 		break;
 	case Type::INT64:
-		col.data = unique_ptr<char[]>(new char[sizeof(int64_t) * num_rows]);
+		col.data.resize(sizeof(int64_t) * num_rows);
 		break;
 	case Type::INT96:
-		col.data = unique_ptr<char[]>(new char[sizeof(Int96) * num_rows]);
+		col.data.resize(sizeof(Int96) * num_rows);
 		break;
 	case Type::FLOAT:
-		col.data = unique_ptr<char[]>(new char[sizeof(float) * num_rows]);
+		col.data.resize(sizeof(float) * num_rows);
 		break;
 	case Type::DOUBLE:
-		col.data = unique_ptr<char[]>(new char[sizeof(double) * num_rows]);
+		col.data.resize(sizeof(double) * num_rows);
 		break;
 	case Type::BYTE_ARRAY:
-		col.data = unique_ptr<char[]>(new char[sizeof(char*) * num_rows]);
+		col.data.resize(sizeof(char*) * num_rows);
 		break;
 
 	default:
@@ -694,8 +684,6 @@ bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
 		initialize_column(result_col, row_group.num_rows);
 		scan_column(s, result_col);
 	}
-
-	// todo make sure some data was scanned
 
 	s.row_group_idx++;
 	return true;

@@ -20,7 +20,6 @@ struct Int96 {
 	uint32_t value[3];
 };
 
-
 template<class T>
 class Dictionary {
 public:
@@ -36,52 +35,38 @@ public:
 	}
 };
 
+class ByteBuffer { // on to the 10 thousandth impl
+public:
+	char* ptr = nullptr;
+	uint64_t len = 0;
+	uint64_t pos = 0;
+
+	void resize(uint64_t new_size) {
+		if (new_size > len) {
+			auto new_holder = std::unique_ptr<char[]>(new char[new_size]);
+			memcpy(new_holder.get(), holder.get(), len);
+			holder = move(new_holder);
+			ptr = holder.get();
+			len = new_size;
+		}
+	}
+private:
+	std::unique_ptr<char[]> holder = nullptr;
+};
+
 class ScanState {
 public:
 	uint64_t row_group_idx = 0;
 	uint64_t row_group_offset = 0;
-
-	std::vector<std::unique_ptr<char[]>> string_heaps;
-
-
-
-//	// potentially legacy
-//	parquet::format::RowGroup* row_group = nullptr;
-//	parquet::format::ColumnChunk* chunk = nullptr;
-//	std::unique_ptr<parquet::format::PageHeader> page = nullptr;
-//
-//	char* payload_ptr = nullptr;
-//	char* payload_end_ptr = nullptr;
-//	uint64_t payload_len;
-//	bool seen_dict;
-//
-//	uint64_t row_base = 0;
-//	uint64_t row_group_nrow = 0;
-//	uint64_t row_group_nread = 0;
-//
-//	uint64_t page_base = 0;
-//	uint64_t column_idx = 0;
-//	std::unique_ptr<uint32_t[]> definition_levels;
-//
-//	void* dict = nullptr; // this is a Dictionary
-
-	// TODO move these to scan state to allow parallelized reading
-	char* read_buf = nullptr;
-	std::unique_ptr<char[]> read_buf_holder = nullptr;
-	uint64_t read_buf_size = 0;
-
-
-	void resize_buf(uint64_t new_size);
 };
-
-
-//constexpr uint64_t MAX_RESULT_COL_LEN = 1024;
 
 struct ResultColumn {
 	uint64_t id;
-	std::unique_ptr<char[]> data;
+	ByteBuffer data;
 	parquet::format::Type::type type;
 	std::vector<bool> defined;
+	std::vector<std::unique_ptr<char[]>> string_heap;
+
 };
 
 struct ResultChunk {
@@ -89,27 +74,20 @@ struct ResultChunk {
 	uint64_t nrows;
 };
 
-
-
 class ParquetFile {
 public:
 	ParquetFile(std::string filename);
-
 	void initialize_result(ResultChunk& result);
-	void initialize_column(ResultColumn& col, uint64_t num_rows);
 	bool scan(ScanState &s, ResultChunk& result);
-
 	uint64_t nrow;
 	std::vector<std::unique_ptr<ParquetColumn>> columns;
 
-
 private:
 	void initialize(std::string filename);
+	void initialize_column(ResultColumn& col, uint64_t num_rows);
+	void scan_column(ScanState& state, ResultColumn& result_col);
 	parquet::format::FileMetaData file_meta_data;
 	std::ifstream pfile;
-
-	void scan_column(ScanState& state, ResultColumn& result_col);
-
 };
 
 }

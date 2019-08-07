@@ -3,7 +3,7 @@
 #include "miniparquet.hpp"
 
 using namespace miniparquet;
-
+using namespace std;
 
 int main(int argc, char * const argv[]) {
 
