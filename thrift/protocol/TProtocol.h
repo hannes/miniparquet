@@ -617,27 +617,29 @@ public:
  */
 class TDummyProtocol : public TProtocol {};
 
-// This is the default / legacy choice
-struct TNetworkBigEndian
-{
-  static uint16_t toWire16(uint16_t x)   {return htons(x);}
-  static uint32_t toWire32(uint32_t x)   {return htonl(x);}
-  static uint64_t toWire64(uint64_t x)   {return THRIFT_htonll(x);}
-  static uint16_t fromWire16(uint16_t x) {return ntohs(x);}
-  static uint32_t fromWire32(uint32_t x) {return ntohl(x);}
-  static uint64_t fromWire64(uint64_t x) {return THRIFT_ntohll(x);}
-};
 
-// On most systems, this will be a bit faster than TNetworkBigEndian
-struct TNetworkLittleEndian
-{
-  static uint16_t toWire16(uint16_t x)   {return THRIFT_htoles(x);}
-  static uint32_t toWire32(uint32_t x)   {return THRIFT_htolel(x);}
-  static uint64_t toWire64(uint64_t x)   {return THRIFT_htolell(x);}
-  static uint16_t fromWire16(uint16_t x) {return THRIFT_letohs(x);}
-  static uint32_t fromWire32(uint32_t x) {return THRIFT_letohl(x);}
-  static uint64_t fromWire64(uint64_t x) {return THRIFT_letohll(x);}
-};
+// HM: this is sub-optimal since it creates a depencency even for memory-only struct
+//// This is the default / legacy choice
+//struct TNetworkBigEndian
+//{
+//  static uint16_t toWire16(uint16_t x)   {return htons(x);}
+//  static uint32_t toWire32(uint32_t x)   {return htonl(x);}
+//  static uint64_t toWire64(uint64_t x)   {return THRIFT_htonll(x);}
+//  static uint16_t fromWire16(uint16_t x) {return ntohs(x);}
+//  static uint32_t fromWire32(uint32_t x) {return ntohl(x);}
+//  static uint64_t fromWire64(uint64_t x) {return THRIFT_ntohll(x);}
+//};
+//
+//// On most systems, this will be a bit faster than TNetworkBigEndian
+//struct TNetworkLittleEndian
+//{
+//  static uint16_t toWire16(uint16_t x)   {return THRIFT_htoles(x);}
+//  static uint32_t toWire32(uint32_t x)   {return THRIFT_htolel(x);}
+//  static uint64_t toWire64(uint64_t x)   {return THRIFT_htolell(x);}
+//  static uint16_t fromWire16(uint16_t x) {return THRIFT_letohs(x);}
+//  static uint32_t fromWire32(uint32_t x) {return THRIFT_letohl(x);}
+//  static uint64_t fromWire64(uint64_t x) {return THRIFT_letohll(x);}
+//};
 
 struct TOutputRecursionTracker {
   TProtocol &prot_;
