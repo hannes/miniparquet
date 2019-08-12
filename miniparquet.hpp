@@ -4,6 +4,7 @@
 #include <vector>
 #include <bitset>
 #include <fstream>
+#include <cstring>
 #include "parquet/parquet_types.h"
 
 namespace miniparquet {
@@ -34,6 +35,8 @@ public:
 			return dict.at(offset);
 	}
 };
+
+// todo move this to impl
 
 class ByteBuffer { // on to the 10 thousandth impl
 public:
