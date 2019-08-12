@@ -18,7 +18,7 @@ libminiparquet.$(SOEXT): $(OBJS)
 
 
 pq2csv: libminiparquet.$(SOEXT) pq2csv.o
-	$(CXX) $(LDFLAGS) -o pq2csv -L. -lminiparquet pq2csv.o 
+	$(CXX) $(LDFLAGS) -o pq2csv $(OBJS) pq2csv.o 
 
 clean:
 	$(RM) $(OBJS) pq2csv
