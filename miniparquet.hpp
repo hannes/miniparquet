@@ -4,7 +4,7 @@
 #include <vector>
 #include <bitset>
 #include <fstream>
-#include "gen-cpp/parquet_types.h"
+#include "parquet/parquet_types.h"
 
 namespace miniparquet {
 

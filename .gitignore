@@ -1,3 +1,5 @@
 *.dylib
 .DS_Store
 pq2csv
+*.o
+*.dSYM
