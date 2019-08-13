@@ -98,18 +98,15 @@ void ParquetFile::initialize(string filename) {
 		throw runtime_error("Only flat tables are supported (no nesting)");
 	}
 
-
-
 // skip the first column its the root and otherwise useless
 	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size();
 			col_idx++) {
-		auto s_ele = file_meta_data.schema[col_idx];
+		auto& s_ele = file_meta_data.schema[col_idx];
 
 		if (!s_ele.__isset.type || s_ele.num_children > 0) {
 			throw runtime_error("Only flat tables are supported (no nesting)");
 		}
-		// TODO if this is REQUIRED, there are no defined levels in file
-
+		// TODO if this is REQUIRED, there are no defined levels in file, support this
 		// if field is REPEATED, no bueno
 		if (s_ele.repetition_type != FieldRepetitionType::OPTIONAL) {
 			throw runtime_error("Only OPTIONAL fields support for now");
@@ -162,7 +159,6 @@ static uint64_t varint_decode(char* source, uint8_t *len_out) {
  * Dictionary indices
  * Boolean values in data pages, as an alternative to PLAIN encoding
  */
-
 
 // todo bit-packed-run-len and rle-run-len must be in the range [1, 2^31 - 1].
 static void decode_bprle(char* payload_ptr, size_t payload_len,
@@ -258,6 +254,9 @@ public:
 	uint64_t page_buf_len = 0;
 	uint64_t page_start_row = 0;
 
+	// for FIXED_LEN_BYTE_ARRAY
+	int32_t type_len;
+
 	template<class T>
 	void fill_dict() {
 		auto dict_size = page_header.dictionary_page_header.num_values;
@@ -293,7 +292,7 @@ public:
 		auto dict_size = page_header.dictionary_page_header.num_values;
 
 		// initialize dictionaries per type
-		switch (result_col.type) {
+		switch (result_col.col->type) {
 		case Type::BOOLEAN:
 			fill_dict<bool>();
 			break;
@@ -337,7 +336,7 @@ public:
 		default:
 			throw runtime_error(
 					"Unsupported type for dictionary: "
-							+ type_to_string(result_col.type));
+							+ type_to_string(result_col.col->type));
 		}
 	}
 
@@ -405,7 +404,7 @@ public:
 	}
 
 	void scan_data_page_plain(ResultColumn& result_col) {
-		switch (result_col.type) {
+		switch (result_col.col->type) {
 		case Type::BOOLEAN:
 			fill_values_plain<bool>(result_col);
 			break;
@@ -425,14 +424,20 @@ public:
 		case Type::DOUBLE:
 			fill_values_plain<double>(result_col);
 			break;
-		case Type::BYTE_ARRAY:
+
+		case Type::FIXED_LEN_BYTE_ARRAY:
+		case Type::BYTE_ARRAY: {
+			uint32_t str_len = type_len; // in case of FIXED_LEN_BYTE_ARRAY
+
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
 				auto row_idx = page_start_row + val_offset;
 
-				uint32_t str_len = *((uint32_t*) page_buf_ptr);
-				page_buf_ptr += sizeof(uint32_t);
+				if (result_col.col->type == Type::BYTE_ARRAY) {
+					str_len = *((uint32_t*) page_buf_ptr);
+					page_buf_ptr += sizeof(uint32_t);
+				}
 
 				if (page_buf_ptr + str_len > page_buf_end_ptr) {
 					throw runtime_error(
@@ -449,12 +454,13 @@ public:
 				page_buf_ptr += str_len;
 
 			}
+		}
 			break;
 
 		default:
 			throw runtime_error(
 					"Unsupported type page_plain "
-							+ type_to_string(result_col.type));
+							+ type_to_string(result_col.col->type));
 		}
 
 	}
@@ -490,10 +496,11 @@ public:
 		auto offsets = unique_ptr<uint32_t[]>(new uint32_t[num_values]);
 
 		// TODO this payload_len is wrong
-		decode_bprle(page_buf_ptr, page_buf_len, enc_length, offsets.get(),
-				num_values);
-
-		switch (result_col.type) {
+		if (enc_length > 0) {
+			decode_bprle(page_buf_ptr, page_buf_len, enc_length, offsets.get(),
+					num_values);
+		}
+		switch (result_col.col->type) {
 
 		case Type::INT32:
 			fill_values_dict<int32_t>(result_col, offsets.get());
@@ -539,7 +546,7 @@ public:
 		default:
 			throw runtime_error(
 					"Unsupported type page_dict "
-							+ type_to_string(result_col.type));
+							+ type_to_string(result_col.col->type));
 		}
 	}
 
@@ -586,6 +593,11 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	// now we have whole chunk in buffer, proceed to read pages
 	ColumnScan cs;
 	auto bytes_to_read = chunk_len;
+
+	// handle fixed len byte arrays, their length lives in schema
+	if (result_col.col->type == Type::FIXED_LEN_BYTE_ARRAY) {
+		cs.type_len = result_col.col->schema_element->type_length;
+	}
 
 	while (bytes_to_read > 0) {
 		auto page_header_len = bytes_to_read; // the header is clearly not that long but we have no idea
@@ -659,7 +671,9 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 	col.defined.resize(num_rows);
 	fill(col.defined.begin(), col.defined.end(), 0);
 
-	switch (col.type) {
+	// TODO do some logical type checking here, we dont like map, list, enum, json, bson etc
+
+	switch (col.col->type) {
 	case Type::BOOLEAN:
 		col.data.resize(sizeof(bool) * num_rows);
 		break;
@@ -682,8 +696,20 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 		col.data.resize(sizeof(char*) * num_rows);
 		break;
 
+	case Type::FIXED_LEN_BYTE_ARRAY: {
+		auto s_ele = columns[col.id]->schema_element;
+
+		if (!s_ele->__isset.type_length) {
+			throw runtime_error("need a type length for fixed byte array");
+		}
+		col.data.resize(num_rows * s_ele->type_length);
+
+		break;
+	}
+
 	default:
-		throw runtime_error("Unsupported type " + type_to_string(col.type));
+		throw runtime_error(
+				"Unsupported type " + type_to_string(col.col->type));
 	}
 }
 
@@ -709,7 +735,9 @@ void ParquetFile::initialize_result(ResultChunk& result) {
 	result.nrows = 0;
 	result.cols.resize(columns.size());
 	for (size_t col_idx = 0; col_idx < columns.size(); col_idx++) {
-		result.cols[col_idx].type = columns[col_idx]->type;
+		//result.cols[col_idx].type = columns[col_idx]->type;
+		result.cols[col_idx].col = columns[col_idx].get();
+
 		result.cols[col_idx].id = col_idx;
 
 	}
