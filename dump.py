@@ -6,6 +6,8 @@ import sys
 
 df = pd.read_parquet(sys.argv[1])
 
+#print(df.dtypes)
+
 # Kann man gar nicht so viel fressen wie man kotzen möchte
 # str_df = df.select_dtypes([np.object])
 # if len(str_df.dtypes) > 0:

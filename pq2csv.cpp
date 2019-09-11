@@ -29,6 +29,8 @@ int main(int argc, char * const argv[]) {
 
 		f.initialize_result(rc);
 
+		// TODO check for NULLness
+
 		while (f.scan(s, rc)) {
 			for (uint64_t row = 0; row < rc.nrows; row++) {
 				for (auto& col : rc.cols) {
@@ -91,7 +93,7 @@ int main(int argc, char * const argv[]) {
 					}
 						break;
 					case parquet::format::Type::BYTE_ARRAY:
-						printf("'%s'",
+						printf("%s",
 								col.string_heap[((uint64_t*) col.data.ptr)[row]].get());
 
 						break;

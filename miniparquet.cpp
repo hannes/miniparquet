@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <math.h>
 
 #include "snappy/snappy.h"
 
@@ -9,6 +10,8 @@
 
 #include <protocol/TCompactProtocol.h>
 #include <transport/TBufferTransports.h>
+
+
 
 using namespace std;
 
@@ -21,9 +24,6 @@ using namespace apache::thrift::transport;
 using namespace miniparquet;
 
 static TCompactProtocolFactoryT<TMemoryBuffer> tproto_factory;
-
-
-
 
 template<class T>
 static void thrift_unpack(const uint8_t* buf, uint32_t* len,
@@ -79,11 +79,12 @@ void ParquetFile::initialize(string filename) {
 	if (!pfile) {
 		throw runtime_error("Could not read footer");
 	}
+
 	thrift_unpack((const uint8_t*) buf.ptr, (uint32_t*) &footer_len,
 			&file_meta_data);
 
-//	file_meta_data.printTo(cout);
-//	cout << "\n";
+//	file_meta_data.printTo(cerr);
+//	cerr << "\n";
 
 	if (file_meta_data.__isset.encryption_algorithm) {
 		throw runtime_error("Encrypted Parquet files are not supported");
@@ -153,6 +154,7 @@ static uint64_t varint_decode(char* source, uint8_t *len_out) {
 	return result;
 }
 
+
 /*
  * Note that the RLE encoding method is only supported for the following types of data:
  * Repetition and definition levels
@@ -160,24 +162,24 @@ static uint64_t varint_decode(char* source, uint8_t *len_out) {
  * Boolean values in data pages, as an alternative to PLAIN encoding
  */
 
-// todo bit-packed-run-len and rle-run-len must be in the range [1, 2^31 - 1].
-static void decode_bprle(char* payload_ptr, size_t payload_len,
-		uint8_t value_width, uint32_t result[], uint32_t result_len) {
+
+// TODO clean this up, suuper ugly (but works ^^)
+template <typename T> static void decode_bprle(char* payload_ptr, size_t payload_len,
+		uint8_t value_width, T result[], uint32_t result_len, uint8_t defined[]) {
 
 	if (value_width < 1 || value_width > 32) {
 		throw runtime_error("Value width needs to be in [1, 32]");
 	}
-	auto val_null_idx = 0;
+	auto result_idx = 0;
 	auto rle_ptr = payload_ptr;
 	auto rle_payload_len = ((value_width + 7) / 8);
 
 	// given value_width bits, whats the largest number that can be encoded? below we check that the result is never bigger
 	uint32_t max_val = (1 << value_width) - 1;
 
-	// TODO make sure we read enough values at the end
-	while (rle_ptr < payload_ptr + payload_len) {
-		if (val_null_idx >= result_len) {
-			return;
+	while (result_idx < result_len) {
+		if (rle_ptr >= payload_ptr + payload_len) {
+			throw runtime_error("Ran out of bits to read. Corrupted file?");
 		}
 
 		// we varint-decode the run header to find out whether its bit packed or rle. weird flex but ok.
@@ -187,35 +189,44 @@ static void decode_bprle(char* payload_ptr, size_t payload_len,
 
 		if (rle_header & 1) { // bit packed header
 			int32_t bit_pack_run_len = (rle_header >> 1) * 8;
+
 			if (bit_pack_run_len <= 0) {
 				throw runtime_error(
-						"Bit pack run length invalid. Corrupted file?");
+						"Bit pack length invalid. Corrupted file?");
 			}
+
 			// TODO defend against huge run len, can't be bigger than remaining payload_len*8/value_width
 			uint64_t source_offset = 0;
-
 			for (auto off = 0; off < bit_pack_run_len; off++) {
 				// They just use a partial byte sometimes so bit_pack_run_len might exceed n_values
-				if (val_null_idx >= result_len) {
-					return;
+				if (result_idx >= result_len) {
+					break;
 				}
 
+				// TODO ensure that we don't run out of rle_ptr here
 				uint32_t val = bitunpack_rev(rle_ptr, &source_offset,
 						value_width);
 
 				if (val > max_val) {
-					throw runtime_error("Payload bigger than allowed");
+					throw runtime_error("Payload bigger than allowed. Corrupted file?");
 				}
-				result[val_null_idx++] = val;
+
+				while (defined && !defined[result_idx]) {
+					result[result_idx++] = 0;
+				}
+
+				result[result_idx++] = val;
 			}
+
 			rle_ptr += (bit_pack_run_len * value_width) / 8;
 		} else { // rle header
-			auto rle_run_len = (rle_header >> 1);
+			int32_t rle_run_len = (rle_header >> 1);
 
-			if (rle_run_len <= 0) {
+ 			if (rle_run_len <= 0) { // sometimes this length is 0, unclear why
 				throw runtime_error(
-						"Run length run length invalid. Corrupted file?");
+						"Run length invalid. Corrupted file?");
 			}
+
 
 			// TODO defend against huge run len
 			uint32_t val = 0;
@@ -223,17 +234,25 @@ static void decode_bprle(char* payload_ptr, size_t payload_len,
 				val |= ((uint8_t) *rle_ptr++) << (i * 8);
 			}
 			if (val > max_val) {
-				throw runtime_error("Payload bigger than allowed");
+				throw runtime_error("Payload value bigger than allowed. Corrupted file?");
 			}
 
 			while (rle_run_len > 0) {
-				if (val_null_idx >= result_len) {
-					return;
+				if (result_idx >= result_len) {
+					throw runtime_error("More values than expected. Corrupted file?");
 				}
-				result[val_null_idx++] = val;
+				while (defined && !defined[result_idx]) {
+					result[result_idx++] = 0;
+				}
+
+				result[result_idx++] = val;
 				rle_run_len--;
 			}
+
 		}
+	}
+	if (result_idx != result_len) {
+		throw runtime_error("Not enough values read");
 	}
 }
 
@@ -250,9 +269,13 @@ public:
 	char* page_buf_ptr = nullptr;
 	char* page_buf_end_ptr = nullptr;
 	void* dict = nullptr;
+	uint64_t dict_size;
 
 	uint64_t page_buf_len = 0;
 	uint64_t page_start_row = 0;
+
+	// TODO use growing buffer here, and don't use uint32_t
+	unique_ptr<uint8_t[]> definition_levels;
 
 	// for FIXED_LEN_BYTE_ARRAY
 	int32_t type_len;
@@ -289,7 +312,7 @@ public:
 		}
 		seen_dict = true;
 
-		auto dict_size = page_header.dictionary_page_header.num_values;
+		dict_size = page_header.dictionary_page_header.num_values;
 
 		// initialize dictionaries per type
 		switch (result_col.col->type) {
@@ -353,8 +376,8 @@ public:
 		auto num_values = page_header.data_page_header.num_values;
 
 		// entry is true if value is not NULL
-		auto definition_levels = unique_ptr<uint32_t[]>(
-				new uint32_t[num_values]);
+		definition_levels = unique_ptr<uint8_t[]>(
+				new uint8_t[num_values]);
 
 		// TODO check if column is REQUIRED, if so, dont read def levels
 
@@ -365,8 +388,8 @@ public:
 			auto def_length = *((uint32_t*) page_buf_ptr);
 			page_buf_ptr += sizeof(uint32_t);
 
-			decode_bprle(page_buf_ptr, def_length, 1, definition_levels.get(),
-					num_values);
+			decode_bprle<uint8_t>(page_buf_ptr, def_length, 1, definition_levels.get(),
+					num_values, NULL);
 			page_buf_ptr += def_length;
 		}
 			break;
@@ -403,6 +426,8 @@ public:
 		}
 	}
 
+
+	// TODO look at definition levels here!
 	void scan_data_page_plain(ResultColumn& result_col) {
 		switch (result_col.col->type) {
 		case Type::BOOLEAN:
@@ -486,20 +511,22 @@ public:
 			throw runtime_error("Missing dictionary page");
 		}
 
-		// the array offset width is a single byte
-		auto enc_length = *((uint8_t*) page_buf_ptr);
-		page_buf_ptr += sizeof(uint8_t);
-
 		auto num_values = page_header.data_page_header.num_values;
 
 		// num_values is int32, hence all dict offsets have to fit in 32 bit
 		auto offsets = unique_ptr<uint32_t[]>(new uint32_t[num_values]);
 
-		// TODO this payload_len is wrong
+		// the array offset width is a single byte
+		auto enc_length = *((uint8_t*) page_buf_ptr);
+		page_buf_ptr += sizeof(uint8_t);
+
 		if (enc_length > 0) {
-			decode_bprle(page_buf_ptr, page_buf_len, enc_length, offsets.get(),
-					num_values);
+			decode_bprle<uint32_t>(page_buf_ptr, page_buf_len, enc_length, offsets.get(),
+					num_values, definition_levels.get());
+		} else {
+			memset(offsets.get(), 0, num_values*sizeof(uint32_t));
 		}
+
 		switch (result_col.col->type) {
 
 		case Type::INT32:
@@ -528,8 +555,6 @@ public:
 
 		case Type::BYTE_ARRAY: {
 			auto result_arr = (uint64_t*) result_col.data.ptr;
-			// TODO we can just copy the offsets here?
-
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
@@ -558,8 +583,8 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	auto& row_group = file_meta_data.row_groups[state.row_group_idx];
 	auto& chunk = row_group.columns[result_col.id];
 
-//	chunk.printTo(cout);
-//	cout << "\n";
+//	chunk.printTo(cerr);
+//	cerr << "\n";
 
 	if (chunk.__isset.file_path) {
 		throw runtime_error(
@@ -607,8 +632,8 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		thrift_unpack((const uint8_t*) chunk_buf.ptr,
 				(uint32_t*) &page_header_len, &cs.page_header);
 
-//		cs.page_header.printTo(cout);
-//		printf("\n");
+//		cs.page_header.printTo(cerr);
+//		cerr << "\n";
 
 		// compressed_page_size does not include the header size
 		chunk_buf.ptr += page_header_len;

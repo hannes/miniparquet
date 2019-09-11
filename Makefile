@@ -1,7 +1,11 @@
 CXX=g++
 RM=rm -rf
+# CPPFLAGS=-O0 -g -Ithrift -I. -std=c++11 -fPIC -I/Users/hannes/source/arrow/cpp/src
+# LDFLAGS=-O0 -g -larrow -L/Users/hannes/source/arrow/cpp/build/debug
+
 CPPFLAGS=-O0 -g -Ithrift -I. -std=c++11 -fPIC
-LDFLAGS=-O0 -g
+LDFLAGS=-O0 -g 
+
 
 SOEXT=so
 UNAME_S := $(shell uname -s)
