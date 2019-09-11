@@ -11,8 +11,6 @@
 #include <protocol/TCompactProtocol.h>
 #include <transport/TBufferTransports.h>
 
-
-
 using namespace std;
 
 using namespace parquet;
@@ -99,7 +97,9 @@ void ParquetFile::initialize(string filename) {
 		throw runtime_error("Only flat tables are supported (no nesting)");
 	}
 
-// skip the first column its the root and otherwise useless
+	// TODO assert that the first col is root
+
+	// skip the first column its the root and otherwise useless
 	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size();
 			col_idx++) {
 		auto& s_ele = file_meta_data.schema[col_idx];
@@ -154,18 +154,17 @@ static uint64_t varint_decode(char* source, uint8_t *len_out) {
 	return result;
 }
 
-
 /*
  * Note that the RLE encoding method is only supported for the following types of data:
  * Repetition and definition levels
  * Dictionary indices
  * Boolean values in data pages, as an alternative to PLAIN encoding
  */
-
-
+/*
 // TODO clean this up, suuper ugly (but works ^^)
-template <typename T> static void decode_bprle(char* payload_ptr, size_t payload_len,
-		uint8_t value_width, T result[], uint32_t result_len, uint8_t defined[]) {
+template<typename T> static void decode_bprle(char* payload_ptr,
+		size_t payload_len, uint8_t value_width, T result[],
+		uint32_t result_len, uint8_t defined[]) {
 
 	if (value_width < 1 || value_width > 32) {
 		throw runtime_error("Value width needs to be in [1, 32]");
@@ -191,8 +190,7 @@ template <typename T> static void decode_bprle(char* payload_ptr, size_t payload
 			int32_t bit_pack_run_len = (rle_header >> 1) * 8;
 
 			if (bit_pack_run_len <= 0) {
-				throw runtime_error(
-						"Bit pack length invalid. Corrupted file?");
+				throw runtime_error("Bit pack length invalid. Corrupted file?");
 			}
 
 			// TODO defend against huge run len, can't be bigger than remaining payload_len*8/value_width
@@ -208,7 +206,8 @@ template <typename T> static void decode_bprle(char* payload_ptr, size_t payload
 						value_width);
 
 				if (val > max_val) {
-					throw runtime_error("Payload bigger than allowed. Corrupted file?");
+					throw runtime_error(
+							"Payload bigger than allowed. Corrupted file?");
 				}
 
 				while (defined && !defined[result_idx]) {
@@ -222,11 +221,9 @@ template <typename T> static void decode_bprle(char* payload_ptr, size_t payload
 		} else { // rle header
 			int32_t rle_run_len = (rle_header >> 1);
 
- 			if (rle_run_len <= 0) { // sometimes this length is 0, unclear why
-				throw runtime_error(
-						"Run length invalid. Corrupted file?");
+			if (rle_run_len <= 0) { // sometimes this length is 0, unclear why
+				throw runtime_error("Run length invalid. Corrupted file?");
 			}
-
 
 			// TODO defend against huge run len
 			uint32_t val = 0;
@@ -234,12 +231,14 @@ template <typename T> static void decode_bprle(char* payload_ptr, size_t payload
 				val |= ((uint8_t) *rle_ptr++) << (i * 8);
 			}
 			if (val > max_val) {
-				throw runtime_error("Payload value bigger than allowed. Corrupted file?");
+				throw runtime_error(
+						"Payload value bigger than allowed. Corrupted file?");
 			}
 
 			while (rle_run_len > 0) {
 				if (result_idx >= result_len) {
-					throw runtime_error("More values than expected. Corrupted file?");
+					throw runtime_error(
+							"More values than expected. Corrupted file?");
 				}
 				while (defined && !defined[result_idx]) {
 					result[result_idx++] = 0;
@@ -255,12 +254,236 @@ template <typename T> static void decode_bprle(char* payload_ptr, size_t payload
 		throw runtime_error("Not enough values read");
 	}
 }
+*/
 
 static string type_to_string(Type::type t) {
 	std::ostringstream ss;
 	ss << t;
 	return ss.str();
 }
+
+class RleBpDecoder {
+
+public:
+	/// Create a decoder object. buffer/buffer_len is the decoded data.
+	/// bit_width is the width of each value (before encoding).
+	RleBpDecoder(const uint8_t* buffer, uint32_t buffer_len, uint32_t bit_width) :
+			buffer(buffer), buffer_len(buffer_len), bit_width_(bit_width), current_value_(
+					0), repeat_count_(0), literal_count_(0) {
+
+		if (bit_width >= 64) {
+			throw runtime_error("Decode bit width too large");
+		}
+		byte_encoded_len = ((bit_width_ + 7) / 8);
+		max_val = (1 << bit_width_) - 1;
+
+	}
+
+	/// Gets a batch of values.  Returns the number of decoded elements.
+	template<typename T>
+	inline int GetBatch(T* values, int batch_size) {
+		uint32_t values_read = 0;
+
+		while (values_read < batch_size) {
+			if (repeat_count_ > 0) {
+				int repeat_batch = std::min(batch_size - values_read,
+						static_cast<uint32_t>(repeat_count_));
+				std::fill(values + values_read,
+						values + values_read + repeat_batch,
+						static_cast<T>(current_value_));
+				repeat_count_ -= repeat_batch;
+				values_read += repeat_batch;
+			} else if (literal_count_ > 0) {
+				uint32_t literal_batch = std::min(batch_size - values_read,
+						static_cast<uint32_t>(literal_count_));
+				uint32_t actual_read = BitUnpack<T>(values + values_read,
+						literal_batch);
+				if (literal_batch != actual_read) {
+					throw runtime_error("Did not find enough values");
+				}
+				literal_count_ -= literal_batch;
+				values_read += literal_batch;
+			} else {
+				if (!NextCounts<T>())
+					return values_read;
+			}
+		}
+		return values_read;
+	}
+
+	template<typename T>
+	inline int GetBatchSpaced(uint32_t batch_size, uint32_t null_count,
+			const uint8_t* defined, T* out) {
+		//  DCHECK_GE(bit_width_, 0);
+		uint32_t values_read = 0;
+		uint32_t remaining_nulls = null_count;
+
+		uint32_t d_off = 0; // defined_offset
+
+		while (values_read < batch_size) {
+			bool is_valid = defined[d_off++];
+
+			if (is_valid) {
+				if ((repeat_count_ == 0) && (literal_count_ == 0)) {
+					if (!NextCounts<T>())
+						return values_read;
+				}
+				if (repeat_count_ > 0) {
+					// The current index is already valid, we don't need to check that again
+					uint32_t repeat_batch = 1;
+					repeat_count_--;
+
+					while (repeat_count_ > 0
+							&& (values_read + repeat_batch) < batch_size) {
+						if (defined[d_off]) {
+							repeat_count_--;
+						} else {
+							remaining_nulls--;
+						}
+						repeat_batch++;
+
+						d_off++;
+					}
+					std::fill(out, out + repeat_batch,
+							static_cast<T>(current_value_));
+					out += repeat_batch;
+					values_read += repeat_batch;
+				} else if (literal_count_ > 0) {
+					int literal_batch = std::min(
+							batch_size - values_read - remaining_nulls,
+							static_cast<uint32_t>(literal_count_));
+
+					// Decode the literals
+					constexpr int kBufferSize = 1024;
+					T indices[kBufferSize];
+					literal_batch = std::min(literal_batch, kBufferSize);
+					auto actual_read = BitUnpack<T>(indices, literal_batch);
+
+					if (actual_read != literal_batch) {
+						throw runtime_error("Did not find enough values");
+
+					}
+
+					uint32_t skipped = 0;
+					uint32_t literals_read = 1;
+					*out++ = indices[0];
+
+					// Read the first bitset to the end
+					while (literals_read < literal_batch) {
+						if (defined[d_off]) {
+							*out = indices[literals_read];
+							literals_read++;
+						} else {
+							skipped++;
+						}
+						++out;
+						d_off++;
+					}
+					literal_count_ -= literal_batch;
+					values_read += literal_batch + skipped;
+					remaining_nulls -= skipped;
+				}
+			} else {
+				++out;
+				values_read++;
+				remaining_nulls--;
+			}
+		}
+
+		return values_read;
+	}
+
+private:
+	const uint8_t* buffer;
+	uint32_t buffer_len;
+
+	/// Number of bits needed to encode the value. Must be between 0 and 64.
+	int bit_width_;
+	uint64_t current_value_;
+	uint32_t repeat_count_;
+	uint32_t literal_count_;
+	uint8_t byte_encoded_len;
+	uint32_t max_val;
+
+	// this is slow but whatever, calls are rare
+	static uint8_t VarintDecode(const uint8_t* source, uint32_t *result_out) {
+		uint32_t result = 0;
+		uint8_t shift = 0;
+		uint8_t len = 0;
+		while (true) {
+			auto byte = *source++;
+			len++;
+			result |= (byte & 127) << shift;
+			if ((byte & 128) == 0)
+				break;
+			shift += 7;
+			if (shift > 32) {
+				throw runtime_error("Varint-decoding found too large number");
+			}
+		}
+		*result_out = result;
+		return len;
+	}
+
+	/// Fills literal_count_ and repeat_count_ with next values. Returns false if there
+	/// are no more.
+	template<typename T>
+	bool NextCounts() {
+		// Read the next run's indicator int, it could be a literal or repeated run.
+		// The int is encoded as a vlq-encoded value.
+		uint32_t indicator_value;
+
+		// TODO check in varint decode if we have enough buffer left
+		buffer += VarintDecode(buffer, &indicator_value);
+
+		// TODO check a bunch of lengths here against the standard
+
+		// lsb indicates if it is a literal run or repeated run
+		bool is_literal = indicator_value & 1;
+		if (is_literal) {
+			literal_count_ = (indicator_value >> 1) * 8;
+		} else {
+			repeat_count_ = indicator_value >> 1;
+			// (ARROW-4018) this is not big-endian compatible, lol
+			current_value_ = 0;
+			for (auto i = 0; i < byte_encoded_len; i++) {
+				current_value_ |= ((uint8_t) *buffer++) << (i * 8);
+			}
+			// sanity check
+			if (current_value_ > max_val) {
+				throw runtime_error(
+						"Payload value bigger than allowed. Corrupted file?");
+			}
+		}
+		// TODO complain if we run out of buffer
+		return true;
+	}
+
+	// TODO this is slow because it always starts from scratch, reimplement with state
+	template<typename T>
+	static T bitunpack_rev(const uint8_t* source, uint64_t *source_offset,
+			uint8_t encoding_length) {
+
+		T target = 0;
+		for (auto j = 0; j < encoding_length; j++, (*source_offset)++) {
+			target |= (1 & (source[(*source_offset) / 8] >> *source_offset % 8))
+					<< j;
+		}
+		return target;
+	}
+
+	// TODO this needs to check whether there is enough buffer left
+	template<typename T>
+	uint32_t BitUnpack(T* dest, uint32_t count) {
+		uint64_t buffer_offset = 0;
+		for (uint32_t i = 0; i < count; i++) {
+			dest[i] = bitunpack_rev<T>(buffer, &buffer_offset, bit_width_);
+		}
+		buffer += bit_width_ * count / 8;
+		return count;
+	}
+
+};
 
 class ColumnScan {
 public:
@@ -376,8 +599,7 @@ public:
 		auto num_values = page_header.data_page_header.num_values;
 
 		// entry is true if value is not NULL
-		definition_levels = unique_ptr<uint8_t[]>(
-				new uint8_t[num_values]);
+		definition_levels = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 
 		// TODO check if column is REQUIRED, if so, dont read def levels
 
@@ -388,8 +610,20 @@ public:
 			auto def_length = *((uint32_t*) page_buf_ptr);
 			page_buf_ptr += sizeof(uint32_t);
 
-			decode_bprle<uint8_t>(page_buf_ptr, def_length, 1, definition_levels.get(),
-					num_values, NULL);
+			//auto test_levels = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+			RleBpDecoder dec((const uint8_t*) page_buf_ptr, def_length, 1);
+			dec.GetBatch<uint8_t>(definition_levels.get(), num_values);
+
+//			decode_bprle<uint8_t>(page_buf_ptr, def_length, 1,
+//					definition_levels.get(), num_values, NULL);
+
+//			for (uint32_t i = 0; i < num_values; i++) {
+//				if (definition_levels[i] != test_levels[i]) {
+//					throw runtime_error("eek");
+//
+//				}
+//			}
+
 			page_buf_ptr += def_length;
 		}
 			break;
@@ -425,7 +659,6 @@ public:
 			page_buf_ptr += sizeof(T);
 		}
 	}
-
 
 	// TODO look at definition levels here!
 	void scan_data_page_plain(ResultColumn& result_col) {
@@ -497,11 +730,12 @@ public:
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
 			// always unpack because NULLs area also encoded (?)
-			auto offset = offsets[val_offset];
 			auto row_idx = page_start_row + val_offset;
 
-			result_arr[row_idx] = ((Dictionary<T>*) dict)->get(offset);
-
+			if (definition_levels[val_offset]) {
+				auto offset = offsets[val_offset];
+				result_arr[row_idx] = ((Dictionary<T>*) dict)->get(offset);
+			}
 		}
 	}
 
@@ -521,10 +755,33 @@ public:
 		page_buf_ptr += sizeof(uint8_t);
 
 		if (enc_length > 0) {
-			decode_bprle<uint32_t>(page_buf_ptr, page_buf_len, enc_length, offsets.get(),
-					num_values, definition_levels.get());
+
+//			auto test_offsets = unique_ptr<uint32_t[]>(
+//					new uint32_t[num_values]);
+			RleBpDecoder dec((const uint8_t*) page_buf_ptr, page_buf_len,
+					enc_length);
+
+			uint32_t null_count = 0;
+			for (uint32_t i = 0; i < num_values; i++) {
+				if (!definition_levels[i]) {
+					null_count++;
+				}
+			}
+
+			dec.GetBatchSpaced(num_values, null_count, definition_levels.get(),
+					offsets.get());
+
+//			decode_bprle<uint32_t>(page_buf_ptr, page_buf_len, enc_length,
+//					test_offsets.get(), num_values, definition_levels.get());
+
+//			for (uint32_t i = 0; i < num_values; i++) {
+//				if (definition_levels[i] && offsets[i] != test_offsets[i]) {
+//					throw runtime_error("eek");
+//				}
+//			}
+
 		} else {
-			memset(offsets.get(), 0, num_values*sizeof(uint32_t));
+			memset(offsets.get(), 0, num_values * sizeof(uint32_t));
 		}
 
 		switch (result_col.col->type) {
