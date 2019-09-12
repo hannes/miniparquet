@@ -7,6 +7,7 @@
 #include "snappy/snappy.h"
 
 #include "miniparquet.hpp"
+#include "bpacking.h"
 
 #include <protocol/TCompactProtocol.h>
 #include <transport/TBufferTransports.h>
@@ -472,12 +473,142 @@ private:
 		return target;
 	}
 
+
+// from Lemire
+	static int unpack32(uint32_t* in, uint32_t* out, int batch_size, int num_bits) {
+	  batch_size = batch_size / 32 * 32;
+	  int num_loops = batch_size / 32;
+
+	  int base =0;
+
+	  switch (num_bits) {
+	    case 0:
+	      for (int i = 0; i < num_loops; ++i) in = nullunpacker32(base, in, out + i * 32);
+	      break;
+	    case 1:
+	      for (int i = 0; i < num_loops; ++i) in = unpack1_32(base, in, out + i * 32);
+	      break;
+	    case 2:
+	      for (int i = 0; i < num_loops; ++i) in = unpack2_32(base, in, out + i * 32);
+	      break;
+	    case 3:
+	      for (int i = 0; i < num_loops; ++i) in = unpack3_32(base, in, out + i * 32);
+	      break;
+	    case 4:
+	      for (int i = 0; i < num_loops; ++i) in = unpack4_32(base, in, out + i * 32);
+	      break;
+	    case 5:
+	      for (int i = 0; i < num_loops; ++i) in = unpack5_32(base, in, out + i * 32);
+	      break;
+	    case 6:
+	      for (int i = 0; i < num_loops; ++i) in = unpack6_32(base, in, out + i * 32);
+	      break;
+	    case 7:
+	      for (int i = 0; i < num_loops; ++i) in = unpack7_32(base, in, out + i * 32);
+	      break;
+	    case 8:
+	      for (int i = 0; i < num_loops; ++i) in = unpack8_32(base, in, out + i * 32);
+	      break;
+	    case 9:
+	      for (int i = 0; i < num_loops; ++i) in = unpack9_32(base, in, out + i * 32);
+	      break;
+	    case 10:
+	      for (int i = 0; i < num_loops; ++i) in = unpack10_32(base, in, out + i * 32);
+	      break;
+	    case 11:
+	      for (int i = 0; i < num_loops; ++i) in = unpack11_32(base, in, out + i * 32);
+	      break;
+	    case 12:
+	      for (int i = 0; i < num_loops; ++i) in = unpack12_32(base, in, out + i * 32);
+	      break;
+	    case 13:
+	      for (int i = 0; i < num_loops; ++i) in = unpack13_32(base, in, out + i * 32);
+	      break;
+	    case 14:
+	      for (int i = 0; i < num_loops; ++i) in = unpack14_32(base, in, out + i * 32);
+	      break;
+	    case 15:
+	      for (int i = 0; i < num_loops; ++i) in = unpack15_32(base, in, out + i * 32);
+	      break;
+	    case 16:
+	      for (int i = 0; i < num_loops; ++i) in = unpack16_32(base, in, out + i * 32);
+	      break;
+	    case 17:
+	      for (int i = 0; i < num_loops; ++i) in = unpack17_32(base, in, out + i * 32);
+	      break;
+	    case 18:
+	      for (int i = 0; i < num_loops; ++i) in = unpack18_32(base, in, out + i * 32);
+	      break;
+	    case 19:
+	      for (int i = 0; i < num_loops; ++i) in = unpack19_32(base, in, out + i * 32);
+	      break;
+	    case 20:
+	      for (int i = 0; i < num_loops; ++i) in = unpack20_32(base, in, out + i * 32);
+	      break;
+	    case 21:
+	      for (int i = 0; i < num_loops; ++i) in = unpack21_32(base, in, out + i * 32);
+	      break;
+	    case 22:
+	      for (int i = 0; i < num_loops; ++i) in = unpack22_32(base, in, out + i * 32);
+	      break;
+	    case 23:
+	      for (int i = 0; i < num_loops; ++i) in = unpack23_32(base, in, out + i * 32);
+	      break;
+	    case 24:
+	      for (int i = 0; i < num_loops; ++i) in = unpack24_32(base, in, out + i * 32);
+	      break;
+	    case 25:
+	      for (int i = 0; i < num_loops; ++i) in = unpack25_32(base, in, out + i * 32);
+	      break;
+	    case 26:
+	      for (int i = 0; i < num_loops; ++i) in = unpack26_32(base, in, out + i * 32);
+	      break;
+	    case 27:
+	      for (int i = 0; i < num_loops; ++i) in = unpack27_32(base, in, out + i * 32);
+	      break;
+	    case 28:
+	      for (int i = 0; i < num_loops; ++i) in = unpack28_32(base, in, out + i * 32);
+	      break;
+	    case 29:
+	      for (int i = 0; i < num_loops; ++i) in = unpack29_32(base, in, out + i * 32);
+	      break;
+	    case 30:
+	      for (int i = 0; i < num_loops; ++i) in = unpack30_32(base, in, out + i * 32);
+	      break;
+	    case 31:
+	      for (int i = 0; i < num_loops; ++i) in = unpack31_32(base, in, out + i * 32);
+	      break;
+	    case 32:
+	      for (int i = 0; i < num_loops; ++i) in = unpack32_32(base, in, out + i * 32);
+	      break;
+	    default:
+			throw runtime_error("Unsupported bit packing width");
+	  }
+
+	  return batch_size;
+	}
+
+	// XXX for now we only need 1 bit to one byte for levels and n bits to 32 bit for offsets
+	//
 	// TODO this needs to check whether there is enough buffer left
 	template<typename T>
 	uint32_t BitUnpack(T* dest, uint32_t count) {
-		uint64_t buffer_offset = 0;
-		for (uint32_t i = 0; i < count; i++) {
-			dest[i] = bitunpack_rev<T>(buffer, &buffer_offset, bit_width_);
+
+		if (sizeof(T) == 4) {
+			// the fast unpacker needs to read 32 values at a time
+			auto bitpack_read_size = ((count + 31) / 32) * 32;
+			T* test = (T *) malloc(sizeof(T) * bitpack_read_size);
+
+			unpack32((uint32_t*)buffer,(uint32_t*)test, bitpack_read_size, bit_width_);
+			memcpy(dest,test, count*sizeof(T));
+			free(test);
+
+		} else {
+			uint64_t buffer_offset = 0;
+			for (uint32_t i = 0; i < count; i++) {
+				dest[i] = bitunpack_rev<T>(buffer, &buffer_offset, bit_width_);
+			}
+
 		}
 		buffer += bit_width_ * count / 8;
 		return count;
@@ -660,7 +791,7 @@ public:
 		}
 	}
 
-	// TODO look at definition levels here!
+	// TODO look at definition levels here! Likely need interleaving too
 	void scan_data_page_plain(ResultColumn& result_col) {
 		switch (result_col.col->type) {
 		case Type::BOOLEAN:
@@ -767,10 +898,12 @@ public:
 					null_count++;
 				}
 			}
-
+if (null_count > 0) {
 			dec.GetBatchSpaced(num_values, null_count, definition_levels.get(),
 					offsets.get());
-
+} else {
+	dec.GetBatch(offsets.get(), num_values);
+}
 //			decode_bprle<uint32_t>(page_buf_ptr, page_buf_len, enc_length,
 //					test_offsets.get(), num_values, definition_levels.get());
 
@@ -865,7 +998,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	// read entire chunk into RAM
 	pfile.seekg(chunk_start);
 	ByteBuffer chunk_buf;
-	chunk_buf.resize(chunk_len);
+	chunk_buf.resize(chunk_len + 32*sizeof(uint32_t)); // extra space at the back for efficient and safe bit packing decoding
 
 	pfile.read(chunk_buf.ptr, chunk_len);
 	if (!pfile) {
@@ -899,7 +1032,9 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		auto payload_end_ptr = chunk_buf.ptr
 				+ cs.page_header.compressed_page_size;
 
-		string decompressed_buf;
+
+		ByteBuffer decompressed_buf;
+
 
 		switch (chunk.meta_data.codec) {
 		case CompressionCodec::UNCOMPRESSED:
@@ -908,15 +1043,18 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 
 			break;
 		case CompressionCodec::SNAPPY: {
-			auto res = snappy::Uncompress(chunk_buf.ptr,
-					cs.page_header.compressed_page_size, &decompressed_buf);
+			size_t decompressed_size;
+			snappy::GetUncompressedLength(chunk_buf.ptr, cs.page_header.compressed_page_size, &decompressed_size);
+			decompressed_buf.resize(decompressed_size +  32*sizeof(uint32_t)); // see above
+
+			auto res = snappy::RawUncompress(chunk_buf.ptr,
+					cs.page_header.compressed_page_size, decompressed_buf.ptr);
 			if (!res
-					|| decompressed_buf.size()
-							!= cs.page_header.uncompressed_page_size) {
+					) {
 				throw runtime_error("Decompression failure");
 			}
 
-			cs.page_buf_ptr = (char*) decompressed_buf.c_str();
+			cs.page_buf_ptr = (char*) decompressed_buf.ptr;
 			cs.page_buf_len = cs.page_header.uncompressed_page_size;
 
 			break;
