@@ -124,138 +124,6 @@ void ParquetFile::initialize(string filename) {
 	this->nrow = file_meta_data.num_rows;
 }
 
-// TODO this is slow because it always starts from scratch, reimplement with state
-static int64_t bitunpack_rev(char* source, uint64_t *source_offset,
-		uint8_t encoding_length) {
-	if (encoding_length > 64) {
-		throw runtime_error("Can't unpack values bigger than 64 bit");
-	}
-	int64_t target = 0;
-	for (auto j = 0; j < encoding_length; j++, (*source_offset)++) {
-		target |= (1 & (source[(*source_offset) / 8] >> *source_offset % 8))
-				<< j;
-	}
-	return target;
-}
-
-static uint64_t varint_decode(char* source, uint8_t *len_out) {
-	uint64_t result = 0; // only decoding lengths here
-	uint8_t shift = 0;
-	while (true) {
-		auto byte = *source++;
-		(*len_out)++;
-		result |= (byte & 127) << shift;
-		if ((byte & 128) == 0)
-			break;
-		shift += 7;
-		if (shift > 64) {
-			throw runtime_error("Varint-decoding found too large number");
-		}
-	}
-	return result;
-}
-
-/*
- * Note that the RLE encoding method is only supported for the following types of data:
- * Repetition and definition levels
- * Dictionary indices
- * Boolean values in data pages, as an alternative to PLAIN encoding
- */
-/*
-// TODO clean this up, suuper ugly (but works ^^)
-template<typename T> static void decode_bprle(char* payload_ptr,
-		size_t payload_len, uint8_t value_width, T result[],
-		uint32_t result_len, uint8_t defined[]) {
-
-	if (value_width < 1 || value_width > 32) {
-		throw runtime_error("Value width needs to be in [1, 32]");
-	}
-	auto result_idx = 0;
-	auto rle_ptr = payload_ptr;
-	auto rle_payload_len = ((value_width + 7) / 8);
-
-	// given value_width bits, whats the largest number that can be encoded? below we check that the result is never bigger
-	uint32_t max_val = (1 << value_width) - 1;
-
-	while (result_idx < result_len) {
-		if (rle_ptr >= payload_ptr + payload_len) {
-			throw runtime_error("Ran out of bits to read. Corrupted file?");
-		}
-
-		// we varint-decode the run header to find out whether its bit packed or rle. weird flex but ok.
-		uint8_t rle_header_len = 0;
-		auto rle_header = varint_decode(rle_ptr, &rle_header_len);
-		rle_ptr += rle_header_len;
-
-		if (rle_header & 1) { // bit packed header
-			int32_t bit_pack_run_len = (rle_header >> 1) * 8;
-
-			if (bit_pack_run_len <= 0) {
-				throw runtime_error("Bit pack length invalid. Corrupted file?");
-			}
-
-			// TODO defend against huge run len, can't be bigger than remaining payload_len*8/value_width
-			uint64_t source_offset = 0;
-			for (auto off = 0; off < bit_pack_run_len; off++) {
-				// They just use a partial byte sometimes so bit_pack_run_len might exceed n_values
-				if (result_idx >= result_len) {
-					break;
-				}
-
-				// TODO ensure that we don't run out of rle_ptr here
-				uint32_t val = bitunpack_rev(rle_ptr, &source_offset,
-						value_width);
-
-				if (val > max_val) {
-					throw runtime_error(
-							"Payload bigger than allowed. Corrupted file?");
-				}
-
-				while (defined && !defined[result_idx]) {
-					result[result_idx++] = 0;
-				}
-
-				result[result_idx++] = val;
-			}
-
-			rle_ptr += (bit_pack_run_len * value_width) / 8;
-		} else { // rle header
-			int32_t rle_run_len = (rle_header >> 1);
-
-			if (rle_run_len <= 0) { // sometimes this length is 0, unclear why
-				throw runtime_error("Run length invalid. Corrupted file?");
-			}
-
-			// TODO defend against huge run len
-			uint32_t val = 0;
-			for (auto i = 0; i < rle_payload_len; i++) {
-				val |= ((uint8_t) *rle_ptr++) << (i * 8);
-			}
-			if (val > max_val) {
-				throw runtime_error(
-						"Payload value bigger than allowed. Corrupted file?");
-			}
-
-			while (rle_run_len > 0) {
-				if (result_idx >= result_len) {
-					throw runtime_error(
-							"More values than expected. Corrupted file?");
-				}
-				while (defined && !defined[result_idx]) {
-					result[result_idx++] = 0;
-				}
-
-				result[result_idx++] = val;
-				rle_run_len--;
-			}
-
-		}
-	}
-	if (result_idx != result_len) {
-		throw runtime_error("Not enough values read");
-	}
-}
-*/
 
 static string type_to_string(Type::type t) {
 	std::ostringstream ss;
@@ -263,6 +131,8 @@ static string type_to_string(Type::type t) {
 	return ss.str();
 }
 
+
+// adapted from arrow parquet reader
 class RleBpDecoder {
 
 public:
@@ -474,7 +344,7 @@ private:
 	}
 
 
-// from Lemire
+	// from Lemire
 	static int unpack32(uint32_t* in, uint32_t* out, int batch_size, int num_bits) {
 	  batch_size = batch_size / 32 * 32;
 	  int num_loops = batch_size / 32;
@@ -597,6 +467,8 @@ private:
 		if (sizeof(T) == 4) {
 			// the fast unpacker needs to read 32 values at a time
 			auto bitpack_read_size = ((count + 31) / 32) * 32;
+
+			// TODO Malloc evil
 			T* test = (T *) malloc(sizeof(T) * bitpack_read_size);
 
 			unpack32((uint32_t*)buffer,(uint32_t*)test, bitpack_read_size, bit_width_);
@@ -628,7 +500,7 @@ public:
 	uint64_t page_buf_len = 0;
 	uint64_t page_start_row = 0;
 
-	// TODO use growing buffer here, and don't use uint32_t
+	// TODO use growing buffer here
 	unique_ptr<uint8_t[]> definition_levels;
 
 	// for FIXED_LEN_BYTE_ARRAY
@@ -785,14 +657,30 @@ public:
 		for (int32_t val_offset = 0;
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
+
+			if (!definition_levels[val_offset]) {
+				continue;
+			}
+
 			auto row_idx = page_start_row + val_offset;
+
+
 			result_arr[row_idx] = *((T*) page_buf_ptr);
 			page_buf_ptr += sizeof(T);
 		}
 	}
 
-	// TODO look at definition levels here! Likely need interleaving too
+// TODO make definition levels available to result?
 	void scan_data_page_plain(ResultColumn& result_col) {
+
+		// TODO compute null count while getting the def levels already?
+		uint32_t null_count = 0;
+					for (uint32_t i = 0; i <  page_header.data_page_header.num_values; i++) {
+						if (!definition_levels[i]) {
+							null_count++;
+						}
+					}
+
 		switch (result_col.col->type) {
 		case Type::BOOLEAN:
 			fill_values_plain<bool>(result_col);
@@ -821,6 +709,12 @@ public:
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
+
+				if (!definition_levels[val_offset]) {
+					continue;
+				}
+
+
 				auto row_idx = page_start_row + val_offset;
 
 				if (result_col.col->type == Type::BYTE_ARRAY) {
@@ -990,7 +884,6 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	if (chunk.meta_data.__isset.dictionary_page_offset
 			&& chunk.meta_data.dictionary_page_offset >= 4) {
 		// this assumes the data pages follow the dict pages directly.
-		// TODO verify this?
 		chunk_start = chunk.meta_data.dictionary_page_offset;
 	}
 	auto chunk_len = chunk.meta_data.total_compressed_size;
@@ -1095,25 +988,25 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 
 	switch (col.col->type) {
 	case Type::BOOLEAN:
-		col.data.resize(sizeof(bool) * num_rows);
+		col.data.resize(sizeof(bool) * num_rows, false);
 		break;
 	case Type::INT32:
-		col.data.resize(sizeof(int32_t) * num_rows);
+		col.data.resize(sizeof(int32_t) * num_rows, false);
 		break;
 	case Type::INT64:
-		col.data.resize(sizeof(int64_t) * num_rows);
+		col.data.resize(sizeof(int64_t) * num_rows, false);
 		break;
 	case Type::INT96:
-		col.data.resize(sizeof(Int96) * num_rows);
+		col.data.resize(sizeof(Int96) * num_rows, false);
 		break;
 	case Type::FLOAT:
-		col.data.resize(sizeof(float) * num_rows);
+		col.data.resize(sizeof(float) * num_rows, false);
 		break;
 	case Type::DOUBLE:
-		col.data.resize(sizeof(double) * num_rows);
+		col.data.resize(sizeof(double) * num_rows, false);
 		break;
 	case Type::BYTE_ARRAY:
-		col.data.resize(sizeof(char*) * num_rows);
+		col.data.resize(sizeof(char*) * num_rows, false);
 		break;
 
 	case Type::FIXED_LEN_BYTE_ARRAY: {
@@ -1122,7 +1015,7 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 		if (!s_ele->__isset.type_length) {
 			throw runtime_error("need a type length for fixed byte array");
 		}
-		col.data.resize(num_rows * s_ele->type_length);
+		col.data.resize(num_rows * s_ele->type_length, false);
 
 		break;
 	}

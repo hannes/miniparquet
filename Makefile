@@ -1,10 +1,11 @@
 CXX=g++
 RM=rm -rf
-# CPPFLAGS=-O0 -g -Ithrift -I. -std=c++11 -fPIC -I/Users/hannes/source/arrow/cpp/src
-# LDFLAGS=-O0 -g -larrow -L/Users/hannes/source/arrow/cpp/build/debug
 
-CPPFLAGS=-O3 -g -Ithrift -I. -std=c++11 -fPIC
-LDFLAGS=-O3 -g 
+# CPPFLAGS=-O0 -g -Ithrift -I. -std=c++11 -fPIC -Wall -fsanitize=address
+# LDFLAGS=-O0 -g -fsanitize=address
+
+CPPFLAGS=-O3 -g -Isrc/thrift -Isrc -std=c++11 -fPIC -Wall
+LDFLAGS=-O3 -g
 
 
 SOEXT=so
@@ -15,7 +16,7 @@ ifeq ($(UNAME_S),Darwin)
 endif
 
 
-OBJS=parquet/parquet_constants.o parquet/parquet_types.o thrift/protocol/TProtocol.o thrift/TOutput.o thrift/transport/TTransportException.o thrift/transport/TBufferTransports.o snappy/snappy.o snappy/snappy-sinksource.o miniparquet.o bpacking.o
+OBJS=src/parquet/parquet_constants.o src/parquet/parquet_types.o src/thrift/protocol/TProtocol.o src/thrift/TOutput.o src/thrift/transport/TTransportException.o src/thrift/transport/TBufferTransports.o src/snappy/snappy.o src/snappy/snappy-sinksource.o src/miniparquet.o src/bpacking.o
 
 all: libminiparquet.$(SOEXT) pq2csv pqbench
 
@@ -30,7 +31,7 @@ pqbench: libminiparquet.$(SOEXT) bench.o
 	$(CXX) $(LDFLAGS) -o pqbench $(OBJS) bench.o 
 
 clean:
-	$(RM) $(OBJS) pq2csv pqbench libminiparquet.$(SOEXT) *.dSYM
+	$(RM) $(OBJS) pq2csvg pqbench libminiparquet.$(SOEXT) *.dSYM
 
 test: pq2csv
 	./test.sh

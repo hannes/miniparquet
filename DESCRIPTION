@@ -1,0 +1,18 @@
+Package: miniparquet
+Title: Read Parquet files from R
+Version: 0.0.1
+Author: Hannes Muehleisen <hannes@cwi.nl>
+Maintainer: Hannes Muehleisen <hannes@cwi.nl>
+Description: TODO
+Depends: 
+    R (>= 3.5.0)
+Imports: methods,
+    utils
+License: MPL
+LazyData: true
+Encoding: UTF-8
+GitHub: https://github.com/hannesmuehleisen/miniparquet
+Collate: 
+    'miniparquet.R'
+SystemRequirements: C++11
+

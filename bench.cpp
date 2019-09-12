@@ -19,9 +19,10 @@ int main(int argc, char * const argv[]) {
 		while (f.scan(s, rc)) {
 			nrow += rc.nrows;
 			
+			printf("%lld\n", nrow);
 
 		}
-		printf("%lld\n", nrow);				
+		printf("t=%lld\n", nrow);
 	}
 
 }

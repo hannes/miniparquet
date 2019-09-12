@@ -1,0 +1,5 @@
+export(read)
+
+import(methods)
+
+useDynLib(miniparquet, .registration = TRUE)

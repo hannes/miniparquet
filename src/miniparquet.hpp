@@ -43,10 +43,12 @@ public:
 	char* ptr = nullptr;
 	uint64_t len = 0;
 
-	void resize(uint64_t new_size) {
+	void resize(uint64_t new_size, bool copy=true) {
 		if (new_size > len) {
 			auto new_holder = std::unique_ptr<char[]>(new char[new_size]);
-			memcpy(new_holder.get(), holder.get(), len);
+			if (copy) {
+				memcpy(new_holder.get(), holder.get(), len);
+			}
 			holder = move(new_holder);
 			ptr = holder.get();
 			len = new_size;
