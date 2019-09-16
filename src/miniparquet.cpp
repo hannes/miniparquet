@@ -53,7 +53,7 @@ void ParquetFile::initialize(string filename) {
 	// check for magic bytes at start of file
 	pfile.read(buf.ptr, 4);
 	if (strncmp(buf.ptr, "PAR1", 4) != 0) {
-		throw runtime_error("No magic bytes found at beginning of file");
+		throw runtime_error("File not found or missing magic bytes");
 	}
 
 	// check for magic bytes at end of file
