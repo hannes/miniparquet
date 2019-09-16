@@ -37,4 +37,7 @@
 #include <winsock2.h>
 #include <windows.h>
 
+#undef OPTIONAL // WTF?!
+#undef Realloc
+
 #endif  // _WIN32

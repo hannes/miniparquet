@@ -47,8 +47,8 @@ ParquetFile::ParquetFile(std::string filename) {
 
 void ParquetFile::initialize(string filename) {
 	ByteBuffer buf;
-
-	pfile = ifstream(filename, std::ios::binary);
+	pfile.open(filename,  std::ios::binary);
+	
 	buf.resize(4);
 	// check for magic bytes at start of file
 	pfile.read(buf.ptr, 4);

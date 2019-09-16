@@ -1,4 +1,3 @@
-#include <Rdefines.h>
 
 // motherfucker
 #undef error
@@ -8,6 +7,9 @@
 #include <cmath>
 
 #include "miniparquet.h"
+#undef ERROR
+#include <Rdefines.h>
+#undef nrows
 
 using namespace miniparquet;
 using namespace std;
@@ -38,7 +40,7 @@ SEXP miniparquet_read(SEXP filesxp) {
 
 		char *fname = (char *) CHAR(STRING_ELT(filesxp, 0));
 
-		auto f = ParquetFile(fname);
+		ParquetFile f(fname);
 
 		// allocate vectors
 

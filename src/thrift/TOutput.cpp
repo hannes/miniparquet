@@ -24,6 +24,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#define THRIFT_SQUELCH_CONSOLE_OUTPUT // be gone
+
 namespace apache {
 namespace thrift {
 
