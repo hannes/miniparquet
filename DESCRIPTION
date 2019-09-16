@@ -1,5 +1,5 @@
 Package: miniparquet
-Title: Read Parquet files from R
+Title: Read Parquet Files from R
 Version: 0.0.1
 Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>

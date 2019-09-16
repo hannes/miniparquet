@@ -43,7 +43,7 @@
  * T_GLOBAL_LOGGING_LEVEL = 0: all logging turned off, logging macros undefined
  * T_GLOBAL_LOGGING_LEVEL = 1: all logging turned on
  */
-#define T_GLOBAL_LOGGING_LEVEL 1
+#define T_GLOBAL_LOGGING_LEVEL 0
 
 /**
  * Standard wrapper around fprintf what will prefix the file name and line
