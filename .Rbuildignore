@@ -12,3 +12,6 @@ test
 pq2csv
 pqbench
 Makefile
+bench\.cpp
+pq2csv\.cpp
+\.travis\.yml
