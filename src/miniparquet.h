@@ -68,7 +68,7 @@ struct ResultColumn {
 	uint64_t id;
 	ByteBuffer data;
 	ParquetColumn *col;
-	std::vector<bool> defined;
+	ByteBuffer defined;
 	std::vector<std::unique_ptr<char[]>> string_heap;
 
 };

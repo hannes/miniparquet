@@ -120,37 +120,73 @@ SEXP miniparquet_read(SEXP filesxp) {
 			for (uint64_t row_idx = 0; row_idx < rc.nrows; row_idx++) {
 				switch (f.columns[col_idx]->type) {
 				case parquet::format::Type::BOOLEAN:
-					LOGICAL_POINTER(dest)[row_idx + dest_offset] =
-							((bool*) col.data.ptr)[row_idx];
+					if (col.defined.ptr[row_idx]) {
+
+						LOGICAL_POINTER(dest)[row_idx + dest_offset] =
+								((bool*) col.data.ptr)[row_idx];
+					} else {
+						LOGICAL_POINTER(dest)[row_idx + dest_offset] =
+								NA_LOGICAL;
+					}
 					break;
 				case parquet::format::Type::INT32:
-					INTEGER_POINTER(dest)[row_idx + dest_offset] =
-							((int32_t*) col.data.ptr)[row_idx];
+					if (col.defined.ptr[row_idx]) {
+
+						INTEGER_POINTER(dest)[row_idx + dest_offset] =
+								((int32_t*) col.data.ptr)[row_idx];
+					} else {
+						INTEGER_POINTER(dest)[row_idx + dest_offset] =
+								NA_INTEGER;
+					}
 					break;
 				case parquet::format::Type::INT64:
-					NUMERIC_POINTER(dest)[row_idx + dest_offset] =
-							(double) ((int64_t*) col.data.ptr)[row_idx];
+					if (col.defined.ptr[row_idx]) {
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] =
+								(double) ((int64_t*) col.data.ptr)[row_idx];
+					} else {
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] = NA_REAL;
+					}
 					break;
 				case parquet::format::Type::DOUBLE:
-					NUMERIC_POINTER(dest)[row_idx + dest_offset] =
-							((double*) col.data.ptr)[row_idx];
+					if (col.defined.ptr[row_idx]) {
+
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] =
+								((double*) col.data.ptr)[row_idx];
+					} else {
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] = NA_REAL;
+					}
 					break;
 				case parquet::format::Type::FLOAT:
-					NUMERIC_POINTER(dest)[row_idx + dest_offset] =
-							(double) ((float*) col.data.ptr)[row_idx];
+					if (col.defined.ptr[row_idx]) {
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] =
+								(double) ((float*) col.data.ptr)[row_idx];
+					} else {
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] = NA_REAL;
+					}
 					break;
 				case parquet::format::Type::INT96: {
-					auto val = ((Int96*) col.data.ptr)[row_idx];
-					NUMERIC_POINTER(dest)[row_idx + dest_offset] =
-							impala_timestamp_to_nanoseconds(val) / 1000000000;
+					if (col.defined.ptr[row_idx]) {
+						auto val = ((Int96*) col.data.ptr)[row_idx];
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] =
+								impala_timestamp_to_nanoseconds(val)
+										/ 1000000000;
+					} else {
+						NUMERIC_POINTER(dest)[row_idx + dest_offset] = NA_REAL;
+					}
+					break;
+				}
+				case parquet::format::Type::BYTE_ARRAY: {
+					if (col.defined.ptr[row_idx]) {
+						auto val =
+								col.string_heap[((uint64_t*) col.data.ptr)[row_idx]].get();
+						SET_STRING_ELT(dest, row_idx + dest_offset,
+								mkCharCE(val, CE_UTF8));
+					} else {
+						SET_STRING_ELT(dest, row_idx + dest_offset, NA_STRING);
+					}
 
 					break;
 				}
-				 case parquet::format::Type::BYTE_ARRAY: {
-					auto val = col.string_heap[((uint64_t*) col.data.ptr)[row_idx]].get();
-					SET_STRING_ELT(dest, row_idx + dest_offset, mkCharCE(val, CE_UTF8));
-					break;
-				 }
 				default: {
 					auto it = parquet::format::_Type_VALUES_TO_NAMES.find(
 							f.columns[col_idx]->type);

@@ -124,13 +124,11 @@ void ParquetFile::initialize(string filename) {
 	this->nrow = file_meta_data.num_rows;
 }
 
-
 static string type_to_string(Type::type t) {
 	std::ostringstream ss;
 	ss << t;
 	return ss.str();
 }
-
 
 // adapted from arrow parquet reader
 class RleBpDecoder {
@@ -343,119 +341,152 @@ private:
 		return target;
 	}
 
-
 	// from Lemire
-	static int unpack32(uint32_t* in, uint32_t* out, int batch_size, int num_bits) {
-	  batch_size = batch_size / 32 * 32;
-	  int num_loops = batch_size / 32;
+	static int unpack32(uint32_t* in, uint32_t* out, int batch_size,
+			int num_bits) {
+		batch_size = batch_size / 32 * 32;
+		int num_loops = batch_size / 32;
 
-	  int base =0;
+		int base = 0;
 
-	  switch (num_bits) {
-	    case 0:
-	      for (int i = 0; i < num_loops; ++i) in = nullunpacker32(base, in, out + i * 32);
-	      break;
-	    case 1:
-	      for (int i = 0; i < num_loops; ++i) in = unpack1_32(base, in, out + i * 32);
-	      break;
-	    case 2:
-	      for (int i = 0; i < num_loops; ++i) in = unpack2_32(base, in, out + i * 32);
-	      break;
-	    case 3:
-	      for (int i = 0; i < num_loops; ++i) in = unpack3_32(base, in, out + i * 32);
-	      break;
-	    case 4:
-	      for (int i = 0; i < num_loops; ++i) in = unpack4_32(base, in, out + i * 32);
-	      break;
-	    case 5:
-	      for (int i = 0; i < num_loops; ++i) in = unpack5_32(base, in, out + i * 32);
-	      break;
-	    case 6:
-	      for (int i = 0; i < num_loops; ++i) in = unpack6_32(base, in, out + i * 32);
-	      break;
-	    case 7:
-	      for (int i = 0; i < num_loops; ++i) in = unpack7_32(base, in, out + i * 32);
-	      break;
-	    case 8:
-	      for (int i = 0; i < num_loops; ++i) in = unpack8_32(base, in, out + i * 32);
-	      break;
-	    case 9:
-	      for (int i = 0; i < num_loops; ++i) in = unpack9_32(base, in, out + i * 32);
-	      break;
-	    case 10:
-	      for (int i = 0; i < num_loops; ++i) in = unpack10_32(base, in, out + i * 32);
-	      break;
-	    case 11:
-	      for (int i = 0; i < num_loops; ++i) in = unpack11_32(base, in, out + i * 32);
-	      break;
-	    case 12:
-	      for (int i = 0; i < num_loops; ++i) in = unpack12_32(base, in, out + i * 32);
-	      break;
-	    case 13:
-	      for (int i = 0; i < num_loops; ++i) in = unpack13_32(base, in, out + i * 32);
-	      break;
-	    case 14:
-	      for (int i = 0; i < num_loops; ++i) in = unpack14_32(base, in, out + i * 32);
-	      break;
-	    case 15:
-	      for (int i = 0; i < num_loops; ++i) in = unpack15_32(base, in, out + i * 32);
-	      break;
-	    case 16:
-	      for (int i = 0; i < num_loops; ++i) in = unpack16_32(base, in, out + i * 32);
-	      break;
-	    case 17:
-	      for (int i = 0; i < num_loops; ++i) in = unpack17_32(base, in, out + i * 32);
-	      break;
-	    case 18:
-	      for (int i = 0; i < num_loops; ++i) in = unpack18_32(base, in, out + i * 32);
-	      break;
-	    case 19:
-	      for (int i = 0; i < num_loops; ++i) in = unpack19_32(base, in, out + i * 32);
-	      break;
-	    case 20:
-	      for (int i = 0; i < num_loops; ++i) in = unpack20_32(base, in, out + i * 32);
-	      break;
-	    case 21:
-	      for (int i = 0; i < num_loops; ++i) in = unpack21_32(base, in, out + i * 32);
-	      break;
-	    case 22:
-	      for (int i = 0; i < num_loops; ++i) in = unpack22_32(base, in, out + i * 32);
-	      break;
-	    case 23:
-	      for (int i = 0; i < num_loops; ++i) in = unpack23_32(base, in, out + i * 32);
-	      break;
-	    case 24:
-	      for (int i = 0; i < num_loops; ++i) in = unpack24_32(base, in, out + i * 32);
-	      break;
-	    case 25:
-	      for (int i = 0; i < num_loops; ++i) in = unpack25_32(base, in, out + i * 32);
-	      break;
-	    case 26:
-	      for (int i = 0; i < num_loops; ++i) in = unpack26_32(base, in, out + i * 32);
-	      break;
-	    case 27:
-	      for (int i = 0; i < num_loops; ++i) in = unpack27_32(base, in, out + i * 32);
-	      break;
-	    case 28:
-	      for (int i = 0; i < num_loops; ++i) in = unpack28_32(base, in, out + i * 32);
-	      break;
-	    case 29:
-	      for (int i = 0; i < num_loops; ++i) in = unpack29_32(base, in, out + i * 32);
-	      break;
-	    case 30:
-	      for (int i = 0; i < num_loops; ++i) in = unpack30_32(base, in, out + i * 32);
-	      break;
-	    case 31:
-	      for (int i = 0; i < num_loops; ++i) in = unpack31_32(base, in, out + i * 32);
-	      break;
-	    case 32:
-	      for (int i = 0; i < num_loops; ++i) in = unpack32_32(base, in, out + i * 32);
-	      break;
-	    default:
+		switch (num_bits) {
+		case 0:
+			for (int i = 0; i < num_loops; ++i)
+				in = nullunpacker32(base, in, out + i * 32);
+			break;
+		case 1:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack1_32(base, in, out + i * 32);
+			break;
+		case 2:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack2_32(base, in, out + i * 32);
+			break;
+		case 3:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack3_32(base, in, out + i * 32);
+			break;
+		case 4:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack4_32(base, in, out + i * 32);
+			break;
+		case 5:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack5_32(base, in, out + i * 32);
+			break;
+		case 6:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack6_32(base, in, out + i * 32);
+			break;
+		case 7:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack7_32(base, in, out + i * 32);
+			break;
+		case 8:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack8_32(base, in, out + i * 32);
+			break;
+		case 9:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack9_32(base, in, out + i * 32);
+			break;
+		case 10:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack10_32(base, in, out + i * 32);
+			break;
+		case 11:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack11_32(base, in, out + i * 32);
+			break;
+		case 12:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack12_32(base, in, out + i * 32);
+			break;
+		case 13:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack13_32(base, in, out + i * 32);
+			break;
+		case 14:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack14_32(base, in, out + i * 32);
+			break;
+		case 15:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack15_32(base, in, out + i * 32);
+			break;
+		case 16:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack16_32(base, in, out + i * 32);
+			break;
+		case 17:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack17_32(base, in, out + i * 32);
+			break;
+		case 18:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack18_32(base, in, out + i * 32);
+			break;
+		case 19:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack19_32(base, in, out + i * 32);
+			break;
+		case 20:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack20_32(base, in, out + i * 32);
+			break;
+		case 21:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack21_32(base, in, out + i * 32);
+			break;
+		case 22:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack22_32(base, in, out + i * 32);
+			break;
+		case 23:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack23_32(base, in, out + i * 32);
+			break;
+		case 24:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack24_32(base, in, out + i * 32);
+			break;
+		case 25:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack25_32(base, in, out + i * 32);
+			break;
+		case 26:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack26_32(base, in, out + i * 32);
+			break;
+		case 27:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack27_32(base, in, out + i * 32);
+			break;
+		case 28:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack28_32(base, in, out + i * 32);
+			break;
+		case 29:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack29_32(base, in, out + i * 32);
+			break;
+		case 30:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack30_32(base, in, out + i * 32);
+			break;
+		case 31:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack31_32(base, in, out + i * 32);
+			break;
+		case 32:
+			for (int i = 0; i < num_loops; ++i)
+				in = unpack32_32(base, in, out + i * 32);
+			break;
+		default:
 			throw runtime_error("Unsupported bit packing width");
-	  }
+		}
 
-	  return batch_size;
+		return batch_size;
 	}
 
 	// XXX for now we only need 1 bit to one byte for levels and n bits to 32 bit for offsets
@@ -471,8 +502,9 @@ private:
 			// TODO Malloc evil
 			T* test = (T *) malloc(sizeof(T) * bitpack_read_size);
 
-			unpack32((uint32_t*)buffer,(uint32_t*)test, bitpack_read_size, bit_width_);
-			memcpy(dest,test, count*sizeof(T));
+			unpack32((uint32_t*) buffer, (uint32_t*) test, bitpack_read_size,
+					bit_width_);
+			memcpy(dest, test, count * sizeof(T));
 			free(test);
 
 		} else {
@@ -499,9 +531,6 @@ public:
 
 	uint64_t page_buf_len = 0;
 	uint64_t page_start_row = 0;
-
-	// TODO use growing buffer here
-	unique_ptr<uint8_t[]> definition_levels;
 
 	// for FIXED_LEN_BYTE_ARRAY
 	int32_t type_len;
@@ -601,11 +630,6 @@ public:
 
 		auto num_values = page_header.data_page_header.num_values;
 
-		// entry is true if value is not NULL
-		definition_levels = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-
-		// TODO check if column is REQUIRED, if so, dont read def levels
-
 		// we have to first decode the define levels
 		switch (page_header.data_page_header.definition_level_encoding) {
 		case Encoding::RLE: {
@@ -615,7 +639,8 @@ public:
 
 			//auto test_levels = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 			RleBpDecoder dec((const uint8_t*) page_buf_ptr, def_length, 1);
-			dec.GetBatch<uint8_t>(definition_levels.get(), num_values);
+			dec.GetBatch<uint8_t>((uint8_t*) result_col.defined.ptr,
+					num_values);
 
 //			decode_bprle<uint8_t>(page_buf_ptr, def_length, 1,
 //					definition_levels.get(), num_values, NULL);
@@ -658,12 +683,11 @@ public:
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
 
-			if (!definition_levels[val_offset]) {
+			if (!((uint8_t*) result_col.defined.ptr)[val_offset]) {
 				continue;
 			}
 
 			auto row_idx = page_start_row + val_offset;
-
 
 			result_arr[row_idx] = *((T*) page_buf_ptr);
 			page_buf_ptr += sizeof(T);
@@ -675,11 +699,11 @@ public:
 
 		// TODO compute null count while getting the def levels already?
 		uint32_t null_count = 0;
-					for (uint32_t i = 0; i <  page_header.data_page_header.num_values; i++) {
-						if (!definition_levels[i]) {
-							null_count++;
-						}
-					}
+		for (uint32_t i = 0; i < page_header.data_page_header.num_values; i++) {
+			if (!((uint8_t*) result_col.defined.ptr)[i]) {
+				null_count++;
+			}
+		}
 
 		switch (result_col.col->type) {
 		case Type::BOOLEAN:
@@ -710,10 +734,9 @@ public:
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
 
-				if (!definition_levels[val_offset]) {
+				if (!((uint8_t*) result_col.defined.ptr)[val_offset]) {
 					continue;
 				}
-
 
 				auto row_idx = page_start_row + val_offset;
 
@@ -757,7 +780,7 @@ public:
 			// always unpack because NULLs area also encoded (?)
 			auto row_idx = page_start_row + val_offset;
 
-			if (definition_levels[val_offset]) {
+			if (((uint8_t*) result_col.defined.ptr)[val_offset]) {
 				auto offset = offsets[val_offset];
 				result_arr[row_idx] = ((Dictionary<T>*) dict)->get(offset);
 			}
@@ -780,32 +803,21 @@ public:
 		page_buf_ptr += sizeof(uint8_t);
 
 		if (enc_length > 0) {
-
-//			auto test_offsets = unique_ptr<uint32_t[]>(
-//					new uint32_t[num_values]);
 			RleBpDecoder dec((const uint8_t*) page_buf_ptr, page_buf_len,
 					enc_length);
 
 			uint32_t null_count = 0;
 			for (uint32_t i = 0; i < num_values; i++) {
-				if (!definition_levels[i]) {
+				if (!((uint8_t*) result_col.defined.ptr)[i]) {
 					null_count++;
 				}
 			}
-if (null_count > 0) {
-			dec.GetBatchSpaced(num_values, null_count, definition_levels.get(),
-					offsets.get());
-} else {
-	dec.GetBatch(offsets.get(), num_values);
-}
-//			decode_bprle<uint32_t>(page_buf_ptr, page_buf_len, enc_length,
-//					test_offsets.get(), num_values, definition_levels.get());
-
-//			for (uint32_t i = 0; i < num_values; i++) {
-//				if (definition_levels[i] && offsets[i] != test_offsets[i]) {
-//					throw runtime_error("eek");
-//				}
-//			}
+			if (null_count > 0) {
+				dec.GetBatchSpaced<uint32_t>(num_values, null_count,
+						((uint8_t*) result_col.defined.ptr), offsets.get());
+			} else {
+				dec.GetBatch<uint32_t>(offsets.get(), num_values);
+			}
 
 		} else {
 			memset(offsets.get(), 0, num_values * sizeof(uint32_t));
@@ -891,7 +903,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	// read entire chunk into RAM
 	pfile.seekg(chunk_start);
 	ByteBuffer chunk_buf;
-	chunk_buf.resize(chunk_len + 32*sizeof(uint32_t)); // extra space at the back for efficient and safe bit packing decoding
+	chunk_buf.resize(chunk_len + 32 * sizeof(uint32_t)); // extra space at the back for efficient and safe bit packing decoding
 
 	pfile.read(chunk_buf.ptr, chunk_len);
 	if (!pfile) {
@@ -925,9 +937,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		auto payload_end_ptr = chunk_buf.ptr
 				+ cs.page_header.compressed_page_size;
 
-
 		ByteBuffer decompressed_buf;
-
 
 		switch (chunk.meta_data.codec) {
 		case CompressionCodec::UNCOMPRESSED:
@@ -937,13 +947,13 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 			break;
 		case CompressionCodec::SNAPPY: {
 			size_t decompressed_size;
-			snappy::GetUncompressedLength(chunk_buf.ptr, cs.page_header.compressed_page_size, &decompressed_size);
-			decompressed_buf.resize(decompressed_size +  32*sizeof(uint32_t)); // see above
+			snappy::GetUncompressedLength(chunk_buf.ptr,
+					cs.page_header.compressed_page_size, &decompressed_size);
+			decompressed_buf.resize(decompressed_size + 32 * sizeof(uint32_t)); // see above
 
 			auto res = snappy::RawUncompress(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, decompressed_buf.ptr);
-			if (!res
-					) {
+			if (!res) {
 				throw runtime_error("Decompression failure");
 			}
 
@@ -981,8 +991,8 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 }
 
 void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
-	col.defined.resize(num_rows);
-	fill(col.defined.begin(), col.defined.end(), 0);
+	col.defined.resize(num_rows, false);
+	memset(col.defined.ptr, 0, num_rows);
 
 	// TODO do some logical type checking here, we dont like map, list, enum, json, bson etc
 

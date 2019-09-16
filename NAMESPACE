@@ -1,4 +1,4 @@
-export(read)
+export(parquet_read)
 
 import(methods)
 

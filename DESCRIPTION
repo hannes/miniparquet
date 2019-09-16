@@ -3,7 +3,7 @@ Title: Read Parquet files from R
 Version: 0.0.1
 Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>
-Description: TODO
+Description: Self-sufficient reader for a subset of Parquet files. Nested tables, compression besides Snappy and encryption are not supported.
 Depends: 
     R (>= 3.5.0)
 Imports: methods

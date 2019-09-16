@@ -91,7 +91,7 @@ void TOutput::errorTimeWrapper(const char* msg) {
   time(&now);
   THRIFT_CTIME_R(&now, dbgtime);
   dbgtime[24] = 0;
-  fprintf(stderr, "Thrift: %s %s\n", dbgtime, msg);
+  //fprintf(stderr, "Thrift: %s %s\n", dbgtime, msg);
 #endif
 }
 
