@@ -6,8 +6,7 @@ Maintainer: Hannes Muehleisen <hannes@cwi.nl>
 Description: TODO
 Depends: 
     R (>= 3.5.0)
-Imports: methods,
-    utils
+Imports: methods
 License: MPL
 LazyData: true
 Encoding: UTF-8

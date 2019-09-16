@@ -1,0 +1,14 @@
+.*\.sh
+.*\.tar.gz
+\.git
+test
+.*\.dylib
+.*\.o
+.*\.so
+.*\.tsv
+.*\.py
+.*\.md
+.*\.thrift
+pq2csv
+pqbench
+Makefile

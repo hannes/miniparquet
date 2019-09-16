@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cmath>
 
-#include "miniparquet.hpp"
+#include "miniparquet.h"
 
 using namespace miniparquet;
 using namespace std;

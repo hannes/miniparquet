@@ -6,7 +6,7 @@
 
 #include "snappy/snappy.h"
 
-#include "miniparquet.hpp"
+#include "miniparquet.h"
 #include "bpacking.h"
 
 #include <protocol/TCompactProtocol.h>
