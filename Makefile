@@ -16,7 +16,7 @@ ifeq ($(UNAME_S),Darwin)
 endif
 
 
-OBJS=src/parquet/parquet_constants.o src/parquet/parquet_types.o src/thrift/protocol/TProtocol.o src/thrift/TOutput.o src/thrift/transport/TTransportException.o src/thrift/transport/TBufferTransports.o src/snappy/snappy.o src/snappy/snappy-sinksource.o src/miniparquet.o src/bpacking.o
+OBJS=src/parquet/parquet_constants.o src/parquet/parquet_types.o src/thrift/protocol/TProtocol.o  src/thrift/transport/TTransportException.o src/thrift/transport/TBufferTransports.o src/snappy/snappy.o src/snappy/snappy-sinksource.o src/miniparquet.o src/bpacking.o
 
 all: libminiparquet.$(SOEXT) pq2csv pqbench
 

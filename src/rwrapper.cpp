@@ -289,43 +289,10 @@ SEXP miniparquet_read(SEXP filesxp) {
 			dest_offset += rc.nrows;
 
 		}
-		// TODO assert dest_offset = nrows
-
 		assert(dest_offset == nrows);
 		UNPROTECT(1); // retlist
 		return retlist;
 
-		/*
-
-
-		 case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
-		 auto& s_ele = col.col->schema_element;
-
-		 if (!s_ele->__isset.converted_type) {
-		 throw runtime_error("Invalid flba type");
-		 }
-
-		 // TODO what about logical_type??
-		 switch (col.col->schema_element->converted_type) {
-		 case parquet::format::ConvertedType::DECIMAL: { // this is a giant clusterfuck
-		 auto type_len = s_ele->type_length;
-		 auto bytes =
-		 col.string_heap[((uint64_t*) col.data.ptr)[row]].get();
-		 int64_t val = 0;
-		 for (auto i = 0; i < type_len; i++) {
-		 val = val << ((type_len - i) * 8)
-		 | (uint8_t) bytes[i];
-		 }
-		 printf("%.2f", val / pow(10.0, s_ele->scale));
-
-		 }
-		 break;
-		 default:
-		 throw runtime_error("Invalid flba type");
-
-		 }
-
-		 }*/
 
 	} catch (std::exception &ex) {
 		Rf_error(ex.what());
