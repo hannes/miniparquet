@@ -30,7 +30,7 @@
 #ifndef BPACKING
 #define BPACKING
 
-uint32_t * pack1_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
+/*uint32_t * pack1_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 uint32_t * pack2_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
@@ -93,7 +93,7 @@ uint32_t * pack30_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
 uint32_t * pack31_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 uint32_t * pack32_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
-
+*/
 
 uint32_t * unpack1_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
@@ -189,7 +189,7 @@ uint32_t * unpack31_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 
 uint32_t * unpack32_8( uint32_t base,  uint32_t *   in, uint32_t *    out);
-
+/*
 uint32_t * pack1_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 uint32_t * pack2_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
@@ -254,7 +254,7 @@ uint32_t * pack31_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 uint32_t * pack32_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
-
+*/
 uint32_t * unpack1_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 
@@ -349,7 +349,7 @@ uint32_t * unpack31_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 
 uint32_t * unpack32_16( uint32_t base,  uint32_t *   in, uint32_t *    out);
-
+/*
 uint32_t * pack1_32( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 uint32_t * pack2_32( uint32_t base,  uint32_t *   in, uint32_t *    out);
@@ -414,7 +414,7 @@ uint32_t * pack31_32( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 uint32_t * pack32_32( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
-
+*/
 uint32_t * unpack1_32( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 
@@ -513,10 +513,11 @@ uint32_t * unpack32_32( uint32_t base,  uint32_t *   in, uint32_t *    out);
 
 typedef uint32_t * (*packfnc)( uint32_t,  uint32_t * , uint32_t * );
 
+/*
 static uint32_t * nullpacker( uint32_t,  uint32_t *   , uint32_t *    out) {
     return out;
 }
-
+*/
 static uint32_t * nullunpacker8( uint32_t base,  uint32_t *  in , uint32_t * out) {
     for(int k = 0; k < 8; ++k) {
 		 out[k] = base;
@@ -573,7 +574,7 @@ const static packfnc unpack8[33]= {nullunpacker8,unpack1_8,
                       unpack31_8,
                       unpack32_8
                      };
-
+/*
 const static packfnc pack8[33]= {nullpacker,pack1_8,
                     pack2_8,
                     pack3_8,
@@ -608,7 +609,7 @@ const static packfnc pack8[33]= {nullpacker,pack1_8,
                     pack32_8
                    };
 
-
+*/
 const static packfnc unpack16[33]= {nullunpacker16,unpack1_16,
                       unpack2_16,
                       unpack3_16,
@@ -643,7 +644,7 @@ const static packfnc unpack16[33]= {nullunpacker16,unpack1_16,
                       unpack32_16
                      };
 
-
+/*
 const static packfnc pack16[33]= {nullpacker,pack1_16,
                      pack2_16,
                      pack3_16,
@@ -677,7 +678,7 @@ const static packfnc pack16[33]= {nullpacker,pack1_16,
                      pack31_16,
                      pack32_16
                     };
-
+*/
 const static packfnc unpack32[33]= {nullunpacker32,unpack1_32,
                        unpack2_32,
                        unpack3_32,
@@ -711,7 +712,7 @@ const static packfnc unpack32[33]= {nullunpacker32,unpack1_32,
                        unpack31_32,
                        unpack32_32
                       };
-
+/*
 const static packfnc pack32[33]= {nullpacker,pack1_32,
                      pack2_32,
                      pack3_32,
@@ -745,4 +746,5 @@ const static packfnc pack32[33]= {nullpacker,pack1_32,
                      pack31_32,
                      pack32_32
                     };
+                    */
 #endif

@@ -8,7 +8,7 @@
 #include "bpacking.h"
 
 
-
+/*
 
 uint32_t * pack1_8( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 
@@ -997,7 +997,7 @@ uint32_t * pack32_8( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 }
 
 
-
+*/
 
 uint32_t * unpack1_8( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 
@@ -2273,7 +2273,7 @@ uint32_t * unpack32_8( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 }
 
 
-
+/*
 uint32_t * pack1_16( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 
     *out =  static_cast<uint32_t>((*in) -base)  ;
@@ -4015,7 +4015,7 @@ uint32_t * pack32_16( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 
     return out;
 }
-
+*/
 
 
 
@@ -6304,7 +6304,7 @@ uint32_t * unpack32_16( uint32_t base,  uint32_t *   in, uint32_t *    out) {
     return in;
 }
 
-
+/*
 
 uint32_t * pack1_32( uint32_t base,  uint32_t *   in, uint32_t *    out) {
 
@@ -9552,7 +9552,7 @@ uint32_t * pack32_32( uint32_t base,  uint32_t *   in, uint32_t *    out) {
     return out;
 }
 
-
+*/
 
 
 uint32_t * unpack1_32( uint32_t base,  uint32_t *   in, uint32_t *    out) {
