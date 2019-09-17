@@ -8,13 +8,13 @@ before_install:
 matrix:
   include:
     - os: linux
-      name: R Package
-
+      name: Linux
       dist: xenial
       language: r
       r: devel
 
       install:
+        - R -f dependencies.R
         - R CMD build .
         - R CMD INSTALL miniparquet_*.tar.gz
 
@@ -23,12 +23,13 @@ matrix:
 
     - os: osx
       osx_image: xcode11
-      name: R Package
+      name: OSX
 
       language: r
       #r: devel
 
       install:
+        - R -f dependencies.R
         - R CMD build .
         - R CMD INSTALL --build miniparquet_*.tar.gz
         - R CMD INSTALL miniparquet_*.tgz
@@ -38,7 +39,7 @@ matrix:
 
 
     - os: windows
-      name: R Package
+      name: Windows
       filter_secrets: false
 
       language: cpp
@@ -51,6 +52,7 @@ matrix:
 
       script:
         - export "PATH=/c/Rtools/bin:$PATH"
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build miniparquet_*.tar.gz
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL miniparquet_*.zip
