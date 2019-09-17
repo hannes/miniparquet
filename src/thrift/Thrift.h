@@ -43,7 +43,7 @@
 #include <typeinfo>
 
 #include <thrift/TLogging.h>
-#include <thrift/TOutput.h>
+//#include <thrift/TOutput.h>
 
 #define THRIFT_UNUSED_VARIABLE(x) ((void)(x))
 
