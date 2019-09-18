@@ -637,20 +637,9 @@ public:
 			auto def_length = *((uint32_t*) page_buf_ptr);
 			page_buf_ptr += sizeof(uint32_t);
 
-			//auto test_levels = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 			RleBpDecoder dec((const uint8_t*) page_buf_ptr, def_length, 1);
 			dec.GetBatch<uint8_t>((uint8_t*) result_col.defined.ptr,
 					num_values);
-
-//			decode_bprle<uint8_t>(page_buf_ptr, def_length, 1,
-//					definition_levels.get(), num_values, NULL);
-
-//			for (uint32_t i = 0; i < num_values; i++) {
-//				if (definition_levels[i] != test_levels[i]) {
-//					throw runtime_error("eek");
-//
-//				}
-//			}
 
 			page_buf_ptr += def_length;
 		}
@@ -854,13 +843,7 @@ public:
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
-				// always unpack because NULLs area also encoded (?)
-				auto offset = offsets[val_offset];
-				auto row_idx = page_start_row + val_offset;
-
-				// these are direct references to the dict
-				result_arr[row_idx] = offset;
-
+				result_arr[page_start_row + val_offset] = offsets[val_offset];
 			}
 			break;
 		}
@@ -918,6 +901,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	if (result_col.col->type == Type::FIXED_LEN_BYTE_ARRAY) {
 		cs.type_len = result_col.col->schema_element->type_length;
 	}
+
 
 	while (bytes_to_read > 0) {
 		auto page_header_len = bytes_to_read; // the header is clearly not that long but we have no idea
@@ -1016,7 +1000,8 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 		col.data.resize(sizeof(double) * num_rows, false);
 		break;
 	case Type::BYTE_ARRAY:
-		col.data.resize(sizeof(char*) * num_rows, false);
+		col.data.resize(sizeof(uint64_t) * num_rows, false);
+		col.string_heap.clear();
 		break;
 
 	case Type::FIXED_LEN_BYTE_ARRAY: {
@@ -1026,7 +1011,7 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 			throw runtime_error("need a type length for fixed byte array");
 		}
 		col.data.resize(num_rows * s_ele->type_length, false);
-
+		col.string_heap.clear();
 		break;
 	}
 

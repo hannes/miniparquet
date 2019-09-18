@@ -1,5 +1,10 @@
 *.dylib
 .DS_Store
 pq2csv
+pqbench
 *.o
 *.dSYM
+.cproject
+.project
+.settings
+*.tar.gz
