@@ -532,6 +532,8 @@ public:
 	uint64_t page_buf_len = 0;
 	uint64_t page_start_row = 0;
 
+	uint8_t* defined_ptr;
+
 	// for FIXED_LEN_BYTE_ARRAY
 	int32_t type_len;
 
@@ -638,7 +640,7 @@ public:
 			page_buf_ptr += sizeof(uint32_t);
 
 			RleBpDecoder dec((const uint8_t*) page_buf_ptr, def_length, 1);
-			dec.GetBatch<uint8_t>((uint8_t*) result_col.defined.ptr,
+			dec.GetBatch<uint8_t>(defined_ptr,
 					num_values);
 
 			page_buf_ptr += def_length;
@@ -663,6 +665,7 @@ public:
 			throw runtime_error("Data page has unsupported/invalid encoding");
 		}
 
+		defined_ptr += num_values;
 		page_start_row += num_values;
 	}
 
@@ -672,7 +675,7 @@ public:
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
 
-			if (!((uint8_t*) result_col.defined.ptr)[val_offset]) {
+			if (!defined_ptr[val_offset]) {
 				continue;
 			}
 
@@ -689,7 +692,7 @@ public:
 		// TODO compute null count while getting the def levels already?
 		uint32_t null_count = 0;
 		for (uint32_t i = 0; i < page_header.data_page_header.num_values; i++) {
-			if (!((uint8_t*) result_col.defined.ptr)[i]) {
+			if (!defined_ptr[i]) {
 				null_count++;
 			}
 		}
@@ -723,7 +726,7 @@ public:
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
 
-				if (!((uint8_t*) result_col.defined.ptr)[val_offset]) {
+				if (!defined_ptr[val_offset]) {
 					continue;
 				}
 
@@ -769,7 +772,7 @@ public:
 			// always unpack because NULLs area also encoded (?)
 			auto row_idx = page_start_row + val_offset;
 
-			if (((uint8_t*) result_col.defined.ptr)[val_offset]) {
+			if (defined_ptr[val_offset]) {
 				auto offset = offsets[val_offset];
 				result_arr[row_idx] = ((Dictionary<T>*) dict)->get(offset);
 			}
@@ -797,13 +800,13 @@ public:
 
 			uint32_t null_count = 0;
 			for (uint32_t i = 0; i < num_values; i++) {
-				if (!((uint8_t*) result_col.defined.ptr)[i]) {
+				if (!defined_ptr[i]) {
 					null_count++;
 				}
 			}
 			if (null_count > 0) {
 				dec.GetBatchSpaced<uint32_t>(num_values, null_count,
-						((uint8_t*) result_col.defined.ptr), offsets.get());
+						defined_ptr, offsets.get());
 			} else {
 				dec.GetBatch<uint32_t>(offsets.get(), num_values);
 			}
@@ -902,6 +905,8 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		cs.type_len = result_col.col->schema_element->type_length;
 	}
 
+	cs.page_start_row = 0;
+	cs.defined_ptr = (uint8_t*)result_col.defined.ptr;
 
 	while (bytes_to_read > 0) {
 		auto page_header_len = bytes_to_read; // the header is clearly not that long but we have no idea
@@ -977,6 +982,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 	col.defined.resize(num_rows, false);
 	memset(col.defined.ptr, 0, num_rows);
+	col.string_heap.clear();
 
 	// TODO do some logical type checking here, we dont like map, list, enum, json, bson etc
 
@@ -1001,7 +1007,6 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 		break;
 	case Type::BYTE_ARRAY:
 		col.data.resize(sizeof(uint64_t) * num_rows, false);
-		col.string_heap.clear();
 		break;
 
 	case Type::FIXED_LEN_BYTE_ARRAY: {
@@ -1011,7 +1016,6 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 			throw runtime_error("need a type length for fixed byte array");
 		}
 		col.data.resize(num_rows * s_ele->type_length, false);
-		col.string_heap.clear();
 		break;
 	}
 

@@ -34,6 +34,13 @@ int main(int argc, char * const argv[]) {
 		while (f.scan(s, rc)) {
 			for (uint64_t row = 0; row < rc.nrows; row++) {
 				for (auto& col : rc.cols) {
+					if (!(uint8_t*)col.defined.ptr[row]) {
+						printf("NULL");
+						if (col.id < rc.cols.size() - 1) {
+							printf("\t");
+						}
+						continue;
+					}
 					switch (col.col->type) {
 					case parquet::format::Type::BOOLEAN:
 						printf("%s",
