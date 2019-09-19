@@ -13,4 +13,4 @@ Encoding: UTF-8
 Collate: 
     'miniparquet.R'
 SystemRequirements: C++11
-
+Suggests: testthat
