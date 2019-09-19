@@ -5,3 +5,6 @@ parquet_read <- function(file) {
 	class(res) <- "data.frame"
 	res
 }
+
+
+read_parquet <- parquet_read

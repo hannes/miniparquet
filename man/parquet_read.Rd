@@ -1,5 +1,6 @@
 \name{parquet_read}
 \alias{parquet_read}
+\alias{read_parquet}
 
 \title{
    Read a Parquet file into a data.frame
