@@ -47,8 +47,8 @@ ParquetFile::ParquetFile(std::string filename) {
 
 void ParquetFile::initialize(string filename) {
 	ByteBuffer buf;
-	pfile.open(filename,  std::ios::binary);
-	
+	pfile.open(filename, std::ios::binary);
+
 	buf.resize(4);
 	// check for magic bytes at start of file
 	pfile.read(buf.ptr, 4);
@@ -137,8 +137,8 @@ public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
 	RleBpDecoder(const uint8_t* buffer, uint32_t buffer_len, uint32_t bit_width) :
-			buffer(buffer), buffer_len(buffer_len), bit_width_(bit_width), current_value_(
-					0), repeat_count_(0), literal_count_(0) {
+			buffer(buffer), bit_width_(bit_width), current_value_(0), repeat_count_(
+					0), literal_count_(0) {
 
 		if (bit_width >= 64) {
 			throw runtime_error("Decode bit width too large");
@@ -264,7 +264,8 @@ public:
 
 private:
 	const uint8_t* buffer;
-	uint32_t buffer_len;
+
+	ByteBuffer unpack_buf;
 
 	/// Number of bits needed to encode the value. Must be between 0 and 64.
 	int bit_width_;
@@ -498,14 +499,11 @@ private:
 		if (sizeof(T) == 4) {
 			// the fast unpacker needs to read 32 values at a time
 			auto bitpack_read_size = ((count + 31) / 32) * 32;
+			unpack_buf.resize(sizeof(T) * bitpack_read_size, false);
 
-			// TODO Malloc evil
-			T* test = (T *) malloc(sizeof(T) * bitpack_read_size);
-
-			unpack32((uint32_t*) buffer, (uint32_t*) test, bitpack_read_size,
-					bit_width_);
-			memcpy(dest, test, count * sizeof(T));
-			free(test);
+			unpack32((uint32_t*) buffer, (uint32_t*) unpack_buf.ptr,
+					bitpack_read_size, bit_width_);
+			memcpy(dest, unpack_buf.ptr, count * sizeof(T));
 
 		} else {
 			uint64_t buffer_offset = 0;
@@ -524,8 +522,8 @@ class ColumnScan {
 public:
 	PageHeader page_header;
 	bool seen_dict = false;
-	char* page_buf_ptr = nullptr;
-	char* page_buf_end_ptr = nullptr;
+	const char* page_buf_ptr = nullptr;
+	const char* page_buf_end_ptr = nullptr;
 	void* dict = nullptr;
 	uint64_t dict_size;
 
@@ -568,7 +566,6 @@ public:
 			throw runtime_error("Multiple dictionary pages for column chunk");
 		}
 		seen_dict = true;
-
 		dict_size = page_header.dictionary_page_header.num_values;
 
 		// initialize dictionaries per type
@@ -593,9 +590,17 @@ public:
 			break;
 		case Type::BYTE_ARRAY:
 			// no dict here we use the result set string heap directly
+		{
+			// never going to have more string data than this uncompressed_page_size (lengths use bytes)
+			auto string_heap_chunk = std::unique_ptr<char[]>(
+					new char[page_header.uncompressed_page_size]);
+			result_col.string_heap_chunks.push_back(move(string_heap_chunk));
+			auto str_ptr =
+					result_col.string_heap_chunks[result_col.string_heap_chunks.size()
+							- 1].get();
+			dict = new Dictionary<char*>(dict_size);
 
 			for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
-
 				uint32_t str_len = *((uint32_t*) page_buf_ptr);
 				page_buf_ptr += sizeof(uint32_t);
 
@@ -604,15 +609,16 @@ public:
 							"Declared string length exceeds payload size");
 				}
 
-				auto s = std::unique_ptr<char[]>(new char[str_len + 1]);
-				s[str_len] = '\0';
-				memcpy(s.get(), page_buf_ptr, str_len);
-				result_col.string_heap.push_back(move(s));
-
+				((Dictionary<char*>*) dict)->dict[dict_index] = str_ptr;
+				// TODO make sure we dont run out of str_ptr
+				memcpy(str_ptr, page_buf_ptr, str_len);
+				str_ptr[str_len] = '\0'; // terminate
+				str_ptr += str_len + 1;
 				page_buf_ptr += str_len;
 			}
 
 			break;
+		}
 		default:
 			throw runtime_error(
 					"Unsupported type for dictionary: "
@@ -640,8 +646,7 @@ public:
 			page_buf_ptr += sizeof(uint32_t);
 
 			RleBpDecoder dec((const uint8_t*) page_buf_ptr, def_length, 1);
-			dec.GetBatch<uint8_t>(defined_ptr,
-					num_values);
+			dec.GetBatch<uint8_t>(defined_ptr, num_values);
 
 			page_buf_ptr += def_length;
 		}
@@ -686,7 +691,6 @@ public:
 		}
 	}
 
-// TODO make definition levels available to result?
 	void scan_data_page_plain(ResultColumn& result_col) {
 
 		// TODO compute null count while getting the def levels already?
@@ -722,6 +726,16 @@ public:
 		case Type::BYTE_ARRAY: {
 			uint32_t str_len = type_len; // in case of FIXED_LEN_BYTE_ARRAY
 
+			uint64_t shc_len = page_header.uncompressed_page_size;
+			if (result_col.col->type == Type::FIXED_LEN_BYTE_ARRAY) {
+				shc_len += page_header.data_page_header.num_values; // make space for terminators
+			}
+			auto string_heap_chunk = std::unique_ptr<char[]>(new char[shc_len]);
+			result_col.string_heap_chunks.push_back(move(string_heap_chunk));
+			auto str_ptr =
+					result_col.string_heap_chunks[result_col.string_heap_chunks.size()
+							- 1].get();
+
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
@@ -742,13 +756,12 @@ public:
 							"Declared string length exceeds payload size");
 				}
 
-				auto s = std::unique_ptr<char[]>(new char[str_len + 1]);
-				memcpy(s.get(), page_buf_ptr, str_len);
-				s[str_len] = '\0';
-				result_col.string_heap.push_back(move(s));
+				((char**) result_col.data.ptr)[row_idx] = str_ptr;
+				// TODO make sure we dont run out of str_ptr too
+				memcpy(str_ptr, page_buf_ptr, str_len);
+				str_ptr[str_len] = '\0';
+				str_ptr += str_len + 1;
 
-				((uint64_t*) result_col.data.ptr)[row_idx] =
-						result_col.string_heap.size() - 1;
 				page_buf_ptr += str_len;
 
 			}
@@ -842,11 +855,12 @@ public:
 			break;
 
 		case Type::BYTE_ARRAY: {
-			auto result_arr = (uint64_t*) result_col.data.ptr;
+			auto result_arr = (char**) result_col.data.ptr;
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
-				result_arr[page_start_row + val_offset] = offsets[val_offset];
+				result_arr[page_start_row + val_offset] =
+						((Dictionary<char*>*) dict)->get(offsets[val_offset]);
 			}
 			break;
 		}
@@ -906,7 +920,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	}
 
 	cs.page_start_row = 0;
-	cs.defined_ptr = (uint8_t*)result_col.defined.ptr;
+	cs.defined_ptr = (uint8_t*) result_col.defined.ptr;
 
 	while (bytes_to_read > 0) {
 		auto page_header_len = bytes_to_read; // the header is clearly not that long but we have no idea
@@ -982,7 +996,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 	col.defined.resize(num_rows, false);
 	memset(col.defined.ptr, 0, num_rows);
-	col.string_heap.clear();
+	col.string_heap_chunks.clear();
 
 	// TODO do some logical type checking here, we dont like map, list, enum, json, bson etc
 
@@ -1006,7 +1020,7 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 		col.data.resize(sizeof(double) * num_rows, false);
 		break;
 	case Type::BYTE_ARRAY:
-		col.data.resize(sizeof(uint64_t) * num_rows, false);
+		col.data.resize(sizeof(char*) * num_rows, false);
 		break;
 
 	case Type::FIXED_LEN_BYTE_ARRAY: {

@@ -31,7 +31,7 @@ pqbench: libminiparquet.$(SOEXT) bench.o
 	$(CXX) $(LDFLAGS) -o pqbench $(OBJS) bench.o 
 
 clean:
-	$(RM) $(OBJS) pq2csvg pqbench libminiparquet.$(SOEXT) *.dSYM
+	$(RM) $(OBJS) pq2csv pq2csv.o pqbench pqbench.o libminiparquet.$(SOEXT) *.dSYM
 
 test: pq2csv
 	./test.sh

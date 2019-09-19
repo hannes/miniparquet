@@ -242,8 +242,7 @@ SEXP miniparquet_read(SEXP filesxp) {
 
 							// this is a giant clusterfuck
 							auto type_len = s_ele->type_length;
-							auto bytes =
-									col.string_heap[((uint64_t*) col.data.ptr)[row_idx]].get();
+							auto bytes =((char**)col.data.ptr)[row_idx];
 							int64_t val = 0;
 							for (auto i = 0; i < type_len; i++) {
 								val = val << ((type_len - i) * 8)
@@ -270,7 +269,7 @@ SEXP miniparquet_read(SEXP filesxp) {
 					case parquet::format::Type::BYTE_ARRAY:
 						SET_STRING_ELT(dest, row_idx + dest_offset,
 								mkCharCE(
-										col.string_heap[((uint64_t*) col.data.ptr)[row_idx]].get(),
+										((char**)col.data.ptr)[row_idx],
 										CE_UTF8));
 						break;
 

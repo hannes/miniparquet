@@ -81,8 +81,7 @@ int main(int argc, char * const argv[]) {
 						switch (col.col->schema_element->converted_type) {
 						case parquet::format::ConvertedType::DECIMAL: { // this is a giant clusterfuck
 							auto type_len = s_ele->type_length;
-							auto bytes =
-									col.string_heap[((uint64_t*) col.data.ptr)[row]].get();
+							auto bytes = ((char**) col.data.ptr)[row];
 							int64_t val = 0;
 							for (auto i = 0; i < type_len; i++) {
 								val = val << ((type_len - i) * 8)
@@ -101,7 +100,7 @@ int main(int argc, char * const argv[]) {
 						break;
 					case parquet::format::Type::BYTE_ARRAY:
 						printf("%s",
-								col.string_heap[((uint64_t*) col.data.ptr)[row]].get());
+								((char**) col.data.ptr)[row]);
 
 						break;
 

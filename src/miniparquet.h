@@ -69,7 +69,7 @@ struct ResultColumn {
 	ByteBuffer data;
 	ParquetColumn *col;
 	ByteBuffer defined;
-	std::vector<std::unique_ptr<char[]>> string_heap;
+	std::vector<std::unique_ptr<char[]>> string_heap_chunks;
 
 };
 
