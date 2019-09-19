@@ -1,6 +1,6 @@
 Package: miniparquet
 Title: Read Parquet Files from R
-Version: 0.0.1
+Version: 0.1.0
 Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>
 Description: Self-sufficient reader for a subset of Parquet files. Nested tables, compression besides Snappy and encryption are not supported.
