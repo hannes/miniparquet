@@ -20,8 +20,4 @@ If you find a file that should be supported but isn't, please open an issue here
 
 
 ## Performance
-`miniparquet` is quite fast, on my laptop (I7-4578U) it can read compressed Parquet files at over 200 MB/s using only a single thread. The only other package that can read Parquet files from R is the recent `arrow` package. Below is a performance comparision with the current CRAN version (0.14.1.1). We have loaded a 220 MB Parquet file containing ~ 6 M rows of the TPC-H lineitem table. The file was created with Spark and is available [for download](https://homepages.cwi.nl/~hannes/lineitem-subset.snappy.parquet). 
-
-The following picture shows time on the X axis and memory usage (RSS) on the Y axis.
-
-![Plot](memory.png)
+`miniparquet` is quite fast, on my laptop (I7-4578U) it can read compressed Parquet files at over 200 MB/s using only a single thread. Previously, there was a comparision with the arrow package here, but it appeared that results were caused by a bug which is fixed.
