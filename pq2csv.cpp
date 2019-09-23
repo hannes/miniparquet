@@ -34,7 +34,7 @@ int main(int argc, char * const argv[]) {
 		while (f.scan(s, rc)) {
 			for (uint64_t row = 0; row < rc.nrows; row++) {
 				for (auto& col : rc.cols) {
-					if (!(uint8_t*)col.defined.ptr[row]) {
+					if (!((uint8_t*)col.defined.ptr)[row]) {
 						printf("NULL");
 						if (col.id < rc.cols.size() - 1) {
 							printf("\t");
@@ -74,7 +74,6 @@ int main(int argc, char * const argv[]) {
 
 						if (!s_ele->__isset.converted_type) {
 							throw runtime_error("Invalid flba type");
-
 						}
 
 						// TODO what about logical_type??

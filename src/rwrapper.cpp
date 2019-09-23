@@ -34,6 +34,7 @@ static int64_t impala_timestamp_to_nanoseconds(const Int96& impala_timestamp) {
 struct parquet_altrep_col {
 	shared_ptr<ParquetFile> f;
 	uint64_t col_idx;
+	vector<bool> materialized;
 };
 
 extern "C" {
@@ -103,7 +104,7 @@ SEXP miniparquet_read(SEXP filesxp) {
 					R_MakeExternalPtr((void*) col, R_NilValue, R_NilValue));
 			R_RegisterCFinalizer(eptr, (void (*)(SEXP)) parquet_finalize);
 
-			SEXP varvalue = NULL;
+SEXP 			varvalue = NULL;
 			switch (f.columns[col_idx]->type) {
 			case parquet::format::Type::BOOLEAN:
 				varvalue = R_new_altrep(parquet_logical, eptr, R_NilValue);
@@ -163,6 +164,7 @@ SEXP miniparquet_read(SEXP filesxp) {
 				UNPROTECT(2); // varvalue, retlist
 				Rf_error("miniparquet_read: Memory allocation failed");
 			}
+			MARK_NOT_MUTABLE(varvalue);
 			SET_VECTOR_ELT(retlist, col_idx, varvalue);
 			UNPROTECT(1); /* varvalue */
 		}
@@ -213,7 +215,6 @@ static const void* parquet_dataptr_or_null(SEXP s) {
 }
 
 static void* parquet_dataptr(SEXP s, Rboolean writeable) {
-
 	if (R_altrep_data2(s) != R_NilValue) {
 		return (void*) parquet_dataptr_or_null(s);
 	}
@@ -235,7 +236,7 @@ static void* parquet_dataptr(SEXP s, Rboolean writeable) {
 		dest = PROTECT(NEW_STRING(col->f->nrow));
 		break;
 	default:
-		Rf_error("eek");
+		Rf_error("Uknown type for conversion in allocation");
 	}
 
 	if (!dest) {
@@ -249,6 +250,7 @@ static void* parquet_dataptr(SEXP s, Rboolean writeable) {
 	result_col.col = col->f->columns[col->col_idx].get();
 	result_col.id = col->col_idx;
 
+	// TODO add try/catch here!
 	uint64_t dest_offset = 0;
 	while (col->f->scan_column(ss, result_col)) {
 
@@ -395,13 +397,47 @@ static SEXP parquet_string_elt(SEXP s, R_xlen_t index) {
 		Rf_error("parquet_string_elt index out of bounds : %lld > %lld", index,
 				col->f->nrow);
 	}
-
-	// find out which row group the index is in
-	// check if row group was already materialized
-	// return materialized value
-
 	SEXP* strings = (SEXP*) parquet_dataptr(s, (Rboolean) false);
 	return strings[index];
+}
+
+static int32_t parquet_integer_elt(SEXP s, R_xlen_t index) {
+	Rf_error("never called? parquet_integer_elt()");
+	auto col = (parquet_altrep_col*) R_ExternalPtrAddr(R_altrep_data1(s));
+	if (index > col->f->nrow) {
+		Rf_error("parquet_string_elt index out of bounds : %lld > %lld", index,
+				col->f->nrow);
+	}
+	int32_t* ints = (int32_t*) parquet_dataptr(s, (Rboolean) false);
+	return ints[index];
+}
+
+static double parquet_numeric_elt(SEXP s, R_xlen_t index) {
+	Rf_error("never called? parquet_numeric_elt()");
+
+	auto col = (parquet_altrep_col*) R_ExternalPtrAddr(R_altrep_data1(s));
+	if (index > col->f->nrow) {
+		Rf_error("parquet_string_elt index out of bounds : %lld > %lld", index,
+				col->f->nrow);
+	}
+	double* dbls = (double*) parquet_dataptr(s, (Rboolean) false);
+	return dbls[index];
+}
+
+static SEXP parquet_subset(SEXP s, SEXP indx, SEXP call) {
+	auto ptr = parquet_dataptr_or_null(s);
+	if (ptr) {
+		return NULL; // signals to call someone else
+	}
+
+	// TODO make sure the subset is continoous, does not have to be
+
+	for (int i = 0; i < LENGTH(indx); i++) {
+		//printf("%d ", INTEGER(indx)[i]);
+	}
+	//printf("\n");
+	//Rf_error("parquet_subset()");
+	return ScalarInteger(42);
 }
 
 // R native routine registration
@@ -441,20 +477,28 @@ void R_init_miniparquet(DllInfo *dll) {
 	R_set_altvec_Dataptr_method(parquet_logical, parquet_dataptr);
 	R_set_altvec_Dataptr_or_null_method(parquet_logical,
 			parquet_dataptr_or_null);
+//	R_set_altvec_Extract_subset_method(parquet_logical, parquet_subset);
 
 	R_set_altvec_Dataptr_method(parquet_integer, parquet_dataptr);
 	R_set_altvec_Dataptr_or_null_method(parquet_integer,
 			parquet_dataptr_or_null);
+	//R_set_altvec_Extract_subset_method(parquet_integer, parquet_subset);
 
 	R_set_altvec_Dataptr_method(parquet_numeric, parquet_dataptr);
 	R_set_altvec_Dataptr_or_null_method(parquet_numeric,
 			parquet_dataptr_or_null);
+//	R_set_altvec_Extract_subset_method(parquet_numeric, parquet_subset);
 
 	R_set_altvec_Dataptr_method(parquet_string, parquet_dataptr);
 	R_set_altvec_Dataptr_or_null_method(parquet_string,
 			parquet_dataptr_or_null);
+	//R_set_altvec_Extract_subset_method(parquet_string, parquet_subset);
 
-	// altstring
+	R_set_altlogical_Elt_method(parquet_string, parquet_integer_elt);
+	R_set_altinteger_Elt_method(parquet_string, parquet_integer_elt);
+	R_set_altreal_Elt_method(parquet_string, parquet_numeric_elt);
 	R_set_altstring_Elt_method(parquet_string, parquet_string_elt);
+
+	// TODO duplicate
 }
 }
