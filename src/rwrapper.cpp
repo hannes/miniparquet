@@ -43,6 +43,15 @@ R_altrep_class_t parquet_integer;
 R_altrep_class_t parquet_numeric;
 R_altrep_class_t parquet_string;
 
+static void* parquet_finalize(SEXP eptr) {
+	auto col = (parquet_altrep_col*) R_ExternalPtrAddr(eptr);
+	if (col) {
+		R_ClearExternalPtr(eptr);
+		delete col;
+	}
+	return R_NilValue;
+}
+
 SEXP miniparquet_read(SEXP filesxp) {
 
 	if (TYPEOF(filesxp) != STRSXP || LENGTH(filesxp) != 1) {
@@ -92,8 +101,7 @@ SEXP miniparquet_read(SEXP filesxp) {
 
 			SEXP eptr = PROTECT(
 					R_MakeExternalPtr((void*) col, R_NilValue, R_NilValue));
-
-			// TODO make a finalizer for eptr that cleans up col
+			R_RegisterCFinalizer(eptr, (void (*)(SEXP)) parquet_finalize);
 
 			SEXP varvalue = NULL;
 			switch (f.columns[col_idx]->type) {
@@ -198,7 +206,7 @@ static const void* parquet_dataptr_or_null(SEXP s) {
 		case STRSXP:
 			return STRING_PTR(R_altrep_data2(s));
 		default:
-			Rf_error("eek");
+			Rf_error("Unkown SEXP type");
 		}
 	}
 	return NULL;
@@ -230,7 +238,10 @@ static void* parquet_dataptr(SEXP s, Rboolean writeable) {
 		Rf_error("eek");
 	}
 
-	// TODO check varvalue;
+	if (!dest) {
+		Rf_error("Memory allocation failure");
+	}
+
 	ResultColumn result_col;
 	ScanState ss;
 
