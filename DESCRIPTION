@@ -5,7 +5,7 @@ Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>
 Description: Self-sufficient reader for a subset of Parquet files. Nested tables, compression besides Snappy and encryption are not supported.
 Depends: 
-    R (>= 3.5.0)
+    R (>= 3.6.0)
 Imports: methods
 License: MPL
 LazyData: true

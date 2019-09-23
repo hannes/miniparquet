@@ -42,12 +42,18 @@ static void thrift_unpack(const uint8_t* buf, uint32_t* len,
 }
 
 ParquetFile::ParquetFile(std::string filename) {
+	this->filename = filename;
 	initialize(filename);
 }
 
 void ParquetFile::initialize(string filename) {
 	ByteBuffer buf;
 	pfile.open(filename, std::ios::binary);
+
+//	// FIXME
+	const int MySize = 1024 * 1024;
+	char* MrBuf = (char*) malloc(MySize);
+	pfile.rdbuf()->pubsetbuf(MrBuf, MySize);
 
 	buf.resize(4);
 	// check for magic bytes at start of file
@@ -763,7 +769,6 @@ public:
 				str_ptr += str_len + 1;
 
 				page_buf_ptr += str_len;
-
 			}
 		}
 			break;
@@ -873,7 +878,7 @@ public:
 
 };
 
-void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
+void ParquetFile::scan_column_internal(ScanState& state, ResultColumn& result_col) {
 	// we now expect a sequence of data pages in the buffer
 
 	auto& row_group = file_meta_data.row_groups[state.row_group_idx];
@@ -997,7 +1002,7 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 	col.defined.resize(num_rows, false);
 	memset(col.defined.ptr, 0, num_rows);
 	col.string_heap_chunks.clear();
-
+	col.nrows = num_rows;
 	// TODO do some logical type checking here, we dont like map, list, enum, json, bson etc
 
 	switch (col.col->type) {
@@ -1039,6 +1044,20 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 	}
 }
 
+
+
+bool ParquetFile::scan_column(ScanState &s, ResultColumn& result_col) {
+	if (s.row_group_idx >= file_meta_data.row_groups.size()) {
+		return false;
+	}
+	auto& row_group = file_meta_data.row_groups[s.row_group_idx];
+	initialize_column(result_col, row_group.num_rows);
+	scan_column_internal(s, result_col);
+	s.row_group_idx++;
+	return true;
+}
+
+
 bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
 	if (s.row_group_idx >= file_meta_data.row_groups.size()) {
 		result.nrows = 0;
@@ -1050,7 +1069,7 @@ bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
 
 	for (auto& result_col : result.cols) {
 		initialize_column(result_col, row_group.num_rows);
-		scan_column(s, result_col);
+		scan_column_internal(s, result_col);
 	}
 
 	s.row_group_idx++;
@@ -1063,7 +1082,6 @@ void ParquetFile::initialize_result(ResultChunk& result) {
 	for (size_t col_idx = 0; col_idx < columns.size(); col_idx++) {
 		//result.cols[col_idx].type = columns[col_idx]->type;
 		result.cols[col_idx].col = columns[col_idx].get();
-
 		result.cols[col_idx].id = col_idx;
 
 	}

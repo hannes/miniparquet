@@ -70,7 +70,7 @@ struct ResultColumn {
 	ParquetColumn *col;
 	ByteBuffer defined;
 	std::vector<std::unique_ptr<char[]>> string_heap_chunks;
-
+	uint64_t nrows;
 };
 
 struct ResultChunk {
@@ -83,13 +83,16 @@ public:
 	ParquetFile(std::string filename);
 	void initialize_result(ResultChunk& result);
 	bool scan(ScanState &s, ResultChunk& result);
+	bool scan_column(ScanState& state, ResultColumn& result_col);
+
 	uint64_t nrow;
 	std::vector<std::unique_ptr<ParquetColumn>> columns;
+	std::string filename;
 
 private:
 	void initialize(std::string filename);
 	void initialize_column(ResultColumn& col, uint64_t num_rows);
-	void scan_column(ScanState& state, ResultColumn& result_col);
+	void scan_column_internal(ScanState& state, ResultColumn& result_col);
 	parquet::format::FileMetaData file_meta_data;
 	std::ifstream pfile;
 };
