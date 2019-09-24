@@ -878,7 +878,7 @@ public:
 
 };
 
-void ParquetFile::scan_column_internal(ScanState& state, ResultColumn& result_col) {
+void ParquetFile::scan_column_internal(ScanState& state, ResultColumn& result_col, uint64_t max_idx) {
 	// we now expect a sequence of data pages in the buffer
 
 	auto& row_group = file_meta_data.row_groups[state.row_group_idx];
@@ -927,7 +927,7 @@ void ParquetFile::scan_column_internal(ScanState& state, ResultColumn& result_co
 	cs.page_start_row = 0;
 	cs.defined_ptr = (uint8_t*) result_col.defined.ptr;
 
-	while (bytes_to_read > 0) {
+	while (bytes_to_read > 0 && cs.page_start_row < max_idx) {
 		auto page_header_len = bytes_to_read; // the header is clearly not that long but we have no idea
 
 		// this is the only other place where we actually unpack a thrift object
@@ -1046,13 +1046,13 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 
 
 
-bool ParquetFile::scan_column(ScanState &s, ResultColumn& result_col) {
+bool ParquetFile::scan_column(ScanState &s, ResultColumn& result_col, uint64_t max_idx) {
 	if (s.row_group_idx >= file_meta_data.row_groups.size()) {
 		return false;
 	}
 	auto& row_group = file_meta_data.row_groups[s.row_group_idx];
 	initialize_column(result_col, row_group.num_rows);
-	scan_column_internal(s, result_col);
+	scan_column_internal(s, result_col, max_idx);
 	s.row_group_idx++;
 	return true;
 }
@@ -1069,7 +1069,7 @@ bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
 
 	for (auto& result_col : result.cols) {
 		initialize_column(result_col, row_group.num_rows);
-		scan_column_internal(s, result_col);
+		scan_column_internal(s, result_col, file_meta_data.num_rows);
 	}
 
 	s.row_group_idx++;

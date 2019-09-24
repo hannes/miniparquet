@@ -83,7 +83,7 @@ public:
 	ParquetFile(std::string filename);
 	void initialize_result(ResultChunk& result);
 	bool scan(ScanState &s, ResultChunk& result);
-	bool scan_column(ScanState& state, ResultColumn& result_col);
+	bool scan_column(ScanState& state, ResultColumn& result_col, uint64_t max_idx);
 
 	uint64_t nrow;
 	std::vector<std::unique_ptr<ParquetColumn>> columns;
@@ -94,7 +94,7 @@ public:
 private:
 	void initialize(std::string filename);
 	void initialize_column(ResultColumn& col, uint64_t num_rows);
-	void scan_column_internal(ScanState& state, ResultColumn& result_col);
+	void scan_column_internal(ScanState& state, ResultColumn& result_col, uint64_t max_idx);
 	std::ifstream pfile;
 };
 
