@@ -25,14 +25,14 @@ using namespace miniparquet;
 static TCompactProtocolFactoryT<TMemoryBuffer> tproto_factory;
 
 template<class T>
-static void thrift_unpack(const uint8_t* buf, uint32_t* len,
-		T* deserialized_msg) {
+static void thrift_unpack(const uint8_t *buf, uint32_t *len,
+		T *deserialized_msg) {
 	shared_ptr<TMemoryBuffer> tmem_transport(
 			new TMemoryBuffer(const_cast<uint8_t*>(buf), *len));
 	shared_ptr<TProtocol> tproto = tproto_factory.getProtocol(tmem_transport);
 	try {
 		deserialized_msg->read(tproto.get());
-	} catch (std::exception& e) {
+	} catch (std::exception &e) {
 		std::stringstream ss;
 		ss << "Couldn't deserialize thrift: " << e.what() << "\n";
 		throw std::runtime_error(ss.str());
@@ -103,7 +103,7 @@ void ParquetFile::initialize(string filename) {
 	// skip the first column its the root and otherwise useless
 	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size();
 			col_idx++) {
-		auto& s_ele = file_meta_data.schema[col_idx];
+		auto &s_ele = file_meta_data.schema[col_idx];
 
 		if (!s_ele.__isset.type || s_ele.num_children > 0) {
 			throw runtime_error("Only flat tables are supported (no nesting)");
@@ -136,7 +136,7 @@ class RleBpDecoder {
 public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
-	RleBpDecoder(const uint8_t* buffer, uint32_t buffer_len, uint32_t bit_width) :
+	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width) :
 			buffer(buffer), bit_width_(bit_width), current_value_(0), repeat_count_(
 					0), literal_count_(0) {
 
@@ -150,7 +150,7 @@ public:
 
 	/// Gets a batch of values.  Returns the number of decoded elements.
 	template<typename T>
-	inline int GetBatch(T* values, int batch_size) {
+	inline int GetBatch(T *values, int batch_size) {
 		uint32_t values_read = 0;
 
 		while (values_read < batch_size) {
@@ -182,7 +182,7 @@ public:
 
 	template<typename T>
 	inline int GetBatchSpaced(uint32_t batch_size, uint32_t null_count,
-			const uint8_t* defined, T* out) {
+			const uint8_t *defined, T *out) {
 		//  DCHECK_GE(bit_width_, 0);
 		uint32_t values_read = 0;
 		uint32_t remaining_nulls = null_count;
@@ -263,7 +263,7 @@ public:
 	}
 
 private:
-	const uint8_t* buffer;
+	const uint8_t *buffer;
 
 	ByteBuffer unpack_buf;
 
@@ -276,7 +276,7 @@ private:
 	uint32_t max_val;
 
 	// this is slow but whatever, calls are rare
-	static uint8_t VarintDecode(const uint8_t* source, uint32_t *result_out) {
+	static uint8_t VarintDecode(const uint8_t *source, uint32_t *result_out) {
 		uint32_t result = 0;
 		uint8_t shift = 0;
 		uint8_t len = 0;
@@ -331,7 +331,7 @@ private:
 
 	// TODO this is slow because it always starts from scratch, reimplement with state
 	template<typename T>
-	static T bitunpack_rev(const uint8_t* source, uint64_t *source_offset,
+	static T bitunpack_rev(const uint8_t *source, uint64_t *source_offset,
 			uint8_t encoding_length) {
 
 		T target = 0;
@@ -343,7 +343,7 @@ private:
 	}
 
 	// from Lemire
-	static int unpack32(uint32_t* in, uint32_t* out, int batch_size,
+	static int unpack32(uint32_t *in, uint32_t *out, int batch_size,
 			int num_bits) {
 		batch_size = batch_size / 32 * 32;
 		int num_loops = batch_size / 32;
@@ -494,7 +494,7 @@ private:
 	//
 	// TODO this needs to check whether there is enough buffer left
 	template<typename T>
-	uint32_t BitUnpack(T* dest, uint32_t count) {
+	uint32_t BitUnpack(T *dest, uint32_t count) {
 
 		if (sizeof(T) == 4) {
 			// the fast unpacker needs to read 32 values at a time
@@ -522,15 +522,15 @@ class ColumnScan {
 public:
 	PageHeader page_header;
 	bool seen_dict = false;
-	const char* page_buf_ptr = nullptr;
-	const char* page_buf_end_ptr = nullptr;
-	void* dict = nullptr;
+	const char *page_buf_ptr = nullptr;
+	const char *page_buf_end_ptr = nullptr;
+	void *dict = nullptr;
 	uint64_t dict_size;
 
 	uint64_t page_buf_len = 0;
 	uint64_t page_start_row = 0;
 
-	uint8_t* defined_ptr;
+	uint8_t *defined_ptr;
 
 	// for FIXED_LEN_BYTE_ARRAY
 	int32_t type_len;
@@ -545,7 +545,7 @@ public:
 		}
 	}
 
-	void scan_dict_page(ResultColumn& result_col) {
+	void scan_dict_page(ResultColumn &result_col) {
 		if (page_header.__isset.data_page_header
 				|| !page_header.__isset.dictionary_page_header) {
 			throw runtime_error("Dictionary page header mismatch");
@@ -626,7 +626,7 @@ public:
 		}
 	}
 
-	void scan_data_page(ResultColumn& result_col) {
+	void scan_data_page(ResultColumn &result_col) {
 		if (!page_header.__isset.data_page_header
 				|| page_header.__isset.dictionary_page_header) {
 			throw runtime_error("Data page header mismatch");
@@ -674,8 +674,8 @@ public:
 		page_start_row += num_values;
 	}
 
-	template<class T> void fill_values_plain(ResultColumn& result_col) {
-		T* result_arr = (T*) result_col.data.ptr;
+	template<class T> void fill_values_plain(ResultColumn &result_col) {
+		T *result_arr = (T*) result_col.data.ptr;
 		for (int32_t val_offset = 0;
 				val_offset < page_header.data_page_header.num_values;
 				val_offset++) {
@@ -691,7 +691,7 @@ public:
 		}
 	}
 
-	void scan_data_page_plain(ResultColumn& result_col) {
+	void scan_data_page_plain(ResultColumn &result_col) {
 
 		// TODO compute null count while getting the def levels already?
 		uint32_t null_count = 0;
@@ -776,8 +776,8 @@ public:
 
 	}
 
-	template<class T> void fill_values_dict(ResultColumn& result_col,
-			uint32_t* offsets) {
+	template<class T> void fill_values_dict(ResultColumn &result_col,
+			uint32_t *offsets) {
 		auto result_arr = (T*) result_col.data.ptr;
 		for (int32_t val_offset = 0;
 				val_offset < page_header.data_page_header.num_values;
@@ -793,7 +793,7 @@ public:
 	}
 
 	// here we look back into the dicts and emit the values we find if the value is defined, otherwise NULL
-	void scan_data_page_dict(ResultColumn& result_col) {
+	void scan_data_page_dict(ResultColumn &result_col) {
 		if (!seen_dict) {
 			throw runtime_error("Missing dictionary page");
 		}
@@ -859,8 +859,13 @@ public:
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
-				result_arr[page_start_row + val_offset] =
-						((Dictionary<char*>*) dict)->get(offsets[val_offset]);
+				if (defined_ptr[val_offset]) {
+					result_arr[page_start_row + val_offset] =
+							((Dictionary<char*>*) dict)->get(
+									offsets[val_offset]);
+				} else {
+					result_arr[page_start_row + val_offset] = nullptr;
+				}
 			}
 			break;
 		}
@@ -873,11 +878,11 @@ public:
 
 };
 
-void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
+void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 	// we now expect a sequence of data pages in the buffer
 
-	auto& row_group = file_meta_data.row_groups[state.row_group_idx];
-	auto& chunk = row_group.columns[result_col.id];
+	auto &row_group = file_meta_data.row_groups[state.row_group_idx];
+	auto &chunk = row_group.columns[result_col.id];
 
 //	chunk.printTo(cerr);
 //	cerr << "\n";
@@ -929,7 +934,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 		cs.page_header = PageHeader();
 		thrift_unpack((const uint8_t*) chunk_buf.ptr,
 				(uint32_t*) &page_header_len, &cs.page_header);
-
+//
 //		cs.page_header.printTo(cerr);
 //		cerr << "\n";
 
@@ -993,7 +998,7 @@ void ParquetFile::scan_column(ScanState& state, ResultColumn& result_col) {
 	}
 }
 
-void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
+void ParquetFile::initialize_column(ResultColumn &col, uint64_t num_rows) {
 	col.defined.resize(num_rows, false);
 	memset(col.defined.ptr, 0, num_rows);
 	col.string_heap_chunks.clear();
@@ -1039,16 +1044,16 @@ void ParquetFile::initialize_column(ResultColumn& col, uint64_t num_rows) {
 	}
 }
 
-bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
+bool ParquetFile::scan(ScanState &s, ResultChunk &result) {
 	if (s.row_group_idx >= file_meta_data.row_groups.size()) {
 		result.nrows = 0;
 		return false;
 	}
 
-	auto& row_group = file_meta_data.row_groups[s.row_group_idx];
+	auto &row_group = file_meta_data.row_groups[s.row_group_idx];
 	result.nrows = row_group.num_rows;
 
-	for (auto& result_col : result.cols) {
+	for (auto &result_col : result.cols) {
 		initialize_column(result_col, row_group.num_rows);
 		scan_column(s, result_col);
 	}
@@ -1057,7 +1062,7 @@ bool ParquetFile::scan(ScanState &s, ResultChunk& result) {
 	return true;
 }
 
-void ParquetFile::initialize_result(ResultChunk& result) {
+void ParquetFile::initialize_result(ResultChunk &result) {
 	result.nrows = 0;
 	result.cols.resize(columns.size());
 	for (size_t col_idx = 0; col_idx < columns.size(); col_idx++) {
