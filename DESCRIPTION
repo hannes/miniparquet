@@ -1,6 +1,6 @@
 Package: miniparquet
 Title: Read Parquet Files from R
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
 	person("Hannes", "M\u00fchleisen", role = c("aut", "cre"), email = "hannes@cwi.nl", comment = c(ORCID = "0000-0001-8552-0029")),
 	person("Google Inc.", role = "cph"),
@@ -10,7 +10,7 @@ Description: Self-sufficient reader for a subset of Parquet files. Nested tables
 Depends: 
     R (>= 3.5.0)
 Imports: methods
-License: MIT
+License: MIT + file LICENSE
 Encoding: UTF-8
 Collate: 
     'miniparquet.R'

@@ -7,6 +7,7 @@ pqtest
 .*\.so
 .*\.tsv
 .*\.py
+.*\.png
 .*\.md
 .*\.thrift
 pq2csv
