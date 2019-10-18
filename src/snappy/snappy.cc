@@ -1208,7 +1208,7 @@ class SnappyIOVecWriter {
       assert(from_iov <= curr_iov_);
       if (from_iov != curr_iov_) {
         const size_t to_copy =
-            std::min(from_iov->iov_len - from_iov_offset, len);
+            std::min((unsigned long)(from_iov->iov_len - from_iov_offset), (unsigned long)len);
         AppendNoCheck(GetIOVecPointer(from_iov, from_iov_offset), to_copy);
         len -= to_copy;
         if (len > 0) {
