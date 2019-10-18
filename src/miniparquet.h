@@ -46,7 +46,7 @@ public:
 	void resize(uint64_t new_size, bool copy=true) {
 		if (new_size > len) {
 			auto new_holder = std::unique_ptr<char[]>(new char[new_size]);
-			if (copy) {
+			if (copy && holder != nullptr) {
 				memcpy(new_holder.get(), holder.get(), len);
 			}
 			holder = move(new_holder);

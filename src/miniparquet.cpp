@@ -705,7 +705,6 @@ public:
 		case Type::BOOLEAN:
 			fill_values_plain<bool>(result_col);
 			break;
-
 		case Type::INT32:
 			fill_values_plain<int32_t>(result_col);
 			break;

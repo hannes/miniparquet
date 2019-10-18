@@ -1,6 +1,6 @@
 Package: miniparquet
 Title: Read Parquet Files
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: c(
 	person("Hannes", "M\u00fchleisen", role = c("aut", "cre"), email = "hannes@cwi.nl", comment = c(ORCID = "0000-0001-8552-0029")),
 	person("Google Inc.", role = "cph"),
