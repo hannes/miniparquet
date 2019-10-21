@@ -810,9 +810,14 @@ public:
 			auto dec_buf_ptr = (const uint8_t*) page_buf_ptr;
 			unique_ptr<uint32_t[]> dec_buf;
 
+			// align buf to make fast decoder work
 			if ((uintptr_t)page_buf_ptr % sizeof(uint32_t) != 0) {
-				dec_buf = unique_ptr<uint32_t[]>(new uint32_t[page_buf_len]);
-				dec_buf_ptr = (const uint8_t*) dec_buf.get();
+				size_t align_space = page_buf_len + sizeof(uint32_t);
+				dec_buf = unique_ptr<uint32_t[]>(new uint32_t[align_space]);
+				void* p = dec_buf.get();
+				dec_buf_ptr = (const uint8_t*) align(alignof(uint32_t), page_buf_len, p, align_space);
+				assert(dec_buf_ptr);
+				assert(align_space >= page_buf_len);
 				memcpy((void*)dec_buf_ptr, (const void*)page_buf_ptr, page_buf_len);
 			}
 			RleBpDecoder dec( dec_buf_ptr, page_buf_len,
