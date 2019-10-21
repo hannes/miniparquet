@@ -403,6 +403,36 @@ public:
 		}
 	}
 
+	// ugly but well
+	void cleanup(ResultColumn &result_col) {
+		switch (result_col.col->type) {
+		case Type::INT32:
+			delete (Dictionary<int32_t>*) dict;
+			break;
+		case Type::INT64:
+			delete (Dictionary<int64_t>*) dict;
+			break;
+		case Type::INT96:
+			delete (Dictionary<Int96>*) dict;
+			break;
+		case Type::FLOAT:
+			delete (Dictionary<float>*) dict;
+			break;
+		case Type::DOUBLE:
+			delete (Dictionary<double>*) dict;
+			break;
+		case Type::BYTE_ARRAY:
+		case Type::FIXED_LEN_BYTE_ARRAY:
+			delete (Dictionary<char*>*) dict;
+			break;
+		default:
+			throw runtime_error(
+					"Unsupported type for dictionary: "
+							+ type_to_string(result_col.col->type));
+		}
+
+	}
+
 	void scan_dict_page(ResultColumn &result_col) {
 		if (page_header.__isset.data_page_header
 				|| !page_header.__isset.dictionary_page_header) {
@@ -428,9 +458,6 @@ public:
 
 		// initialize dictionaries per type
 		switch (result_col.col->type) {
-		case Type::BOOLEAN:
-			fill_dict<bool>();
-			break;
 		case Type::INT32:
 			fill_dict<int32_t>();
 			break;
@@ -574,7 +601,7 @@ public:
 				}
 
 				auto row_idx = page_start_row + val_offset;
-				result_arr[row_idx] = ((bool*)page_buf_ptr != 0);
+				result_arr[row_idx] = ((bool*) page_buf_ptr != 0);
 				page_buf_ptr += sizeof(bool);
 			}
 
@@ -871,6 +898,7 @@ void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 		chunk_buf.ptr = payload_end_ptr;
 		bytes_to_read -= cs.page_header.compressed_page_size;
 	}
+	cs.cleanup(result_col);
 }
 
 void ParquetFile::initialize_column(ResultColumn &col, uint64_t num_rows) {
@@ -909,7 +937,7 @@ void ParquetFile::initialize_column(ResultColumn &col, uint64_t num_rows) {
 		if (!s_ele->__isset.type_length) {
 			throw runtime_error("need a type length for fixed byte array");
 		}
-		col.data.resize(num_rows * sizeof(char*), false); // space for terminators ^^
+		col.data.resize(num_rows * sizeof(char*), false);
 		break;
 	}
 
