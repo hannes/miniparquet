@@ -807,7 +807,15 @@ public:
 		page_buf_ptr += sizeof(uint8_t);
 
 		if (enc_length > 0) {
-			RleBpDecoder dec((const uint8_t*) page_buf_ptr, page_buf_len,
+			auto dec_buf_ptr = (const uint8_t*) page_buf_ptr;
+			unique_ptr<uint32_t[]> dec_buf;
+
+			if ((uintptr_t)page_buf_ptr % sizeof(uint32_t) != 0) {
+				dec_buf = unique_ptr<uint32_t[]>(new uint32_t[page_buf_len]);
+				dec_buf_ptr = (const uint8_t*) dec_buf.get();
+				memcpy((void*)dec_buf_ptr, (const void*)page_buf_ptr, page_buf_len);
+			}
+			RleBpDecoder dec( dec_buf_ptr, page_buf_len,
 					enc_length);
 
 			uint32_t null_count = 0;
