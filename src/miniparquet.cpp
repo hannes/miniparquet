@@ -328,51 +328,37 @@ private:
 		return true;
 	}
 
-	// TODO this is slow because it always starts from scratch, reimplement with state
-	template<typename T>
-	static T bitunpack_rev(const uint8_t *source, uint64_t *source_offset,
-			uint8_t encoding_length) {
-		T target = 0;
-		for (auto j = 0; j < encoding_length; j++, (*source_offset)++) {
-			target |= (1 & (source[(*source_offset) / 8] >> *source_offset % 8))
-					<< j;
-		}
-		return target;
-	}
-
 	// somewhat optimized implementation that avoids non-alignment
 
 	struct bitpack_state {
 		uint64_t bitpack_off = 0;
-		int8_t   bitpack_pos = 0;
+		int8_t bitpack_pos = 0;
 	};
 
 	static const uint32_t BITPACK_MASKS[];
 	static const uint8_t BITPACK_DLEN;
 
 	template<typename T>
-		static T bitunpack_rev2(const uint8_t* source, uint8_t encoding_length, bitpack_state* state) {
+	static T bitunpack_rev2(const uint8_t *source, uint8_t encoding_length,
+			bitpack_state *state) {
 		assert(encoding_length < 32);
-	    T val = (source[state->bitpack_off] >> state->bitpack_pos) & BITPACK_MASKS[encoding_length];
-	    state->bitpack_pos += encoding_length;
-	    while (state->bitpack_pos >= BITPACK_DLEN) {
-	        val |= (source[++state->bitpack_off] <<
-	            (BITPACK_DLEN - (state->bitpack_pos - encoding_length))) & BITPACK_MASKS[encoding_length];
-	        state->bitpack_pos -= BITPACK_DLEN;
-	    }
-	    return val;
+		T val = (source[state->bitpack_off] >> state->bitpack_pos)
+				& BITPACK_MASKS[encoding_length];
+		state->bitpack_pos += encoding_length;
+		while (state->bitpack_pos > BITPACK_DLEN) {
+			val |= (source[++state->bitpack_off]
+					<< (BITPACK_DLEN - (state->bitpack_pos - encoding_length)))
+					& BITPACK_MASKS[encoding_length];
+			state->bitpack_pos -= BITPACK_DLEN;
+		}
+		return val;
 	}
-
 
 	template<typename T>
 	uint32_t BitUnpack(T *dest, uint32_t count) {
-
-		// uint64_t buffer_offset = 0;
-
 		bitpack_state state;
 		for (uint32_t i = 0; i < count; i++) {
-			//dest[i] = bitunpack_rev<T>(buffer, &buffer_offset, bit_width_);
-			dest[i]  = bitunpack_rev2<T>(buffer, bit_width_, &state);
+			dest[i] = bitunpack_rev2<T>(buffer, bit_width_, &state);
 		}
 		buffer += bit_width_ * count / 8;
 		return count;
@@ -380,12 +366,12 @@ private:
 
 };
 
-const uint32_t RleBpDecoder::BITPACK_MASKS[] = {0, 1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095,
-	    8191, 16383, 32767, 65535, 131071, 262143, 524287, 1048575, 2097151, 4194303, 8388607,
-	    16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
+const uint32_t RleBpDecoder::BITPACK_MASKS[] = { 0, 1, 3, 7, 15, 31, 63, 127,
+		255, 511, 1023, 2047, 4095, 8191, 16383, 32767, 65535, 131071, 262143,
+		524287, 1048575, 2097151, 4194303, 8388607, 16777215, 33554431,
+		67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647 };
 
 const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
-
 
 class ColumnScan {
 public:
@@ -409,8 +395,11 @@ public:
 		auto dict_size = page_header.dictionary_page_header.num_values;
 		dict = new Dictionary<T>(dict_size);
 		for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
-			((Dictionary<T>*) dict)->dict[dict_index] = *(T*) page_buf_ptr;
+			T val;
+			memcpy(&val, page_buf_ptr, sizeof(val));
 			page_buf_ptr += sizeof(T);
+
+			((Dictionary<T>*) dict)->dict[dict_index] = val;
 		}
 	}
 
@@ -470,8 +459,9 @@ public:
 			dict = new Dictionary<char*>(dict_size);
 
 			for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
-				uint32_t str_len = *((uint32_t*) page_buf_ptr);
-				page_buf_ptr += sizeof(uint32_t);
+				uint32_t str_len;
+				memcpy(&str_len, page_buf_ptr, sizeof(str_len));
+				page_buf_ptr += sizeof(str_len);
 
 				if (page_buf_ptr + str_len > page_buf_end_ptr) {
 					throw runtime_error(
@@ -511,8 +501,9 @@ public:
 		switch (page_header.data_page_header.definition_level_encoding) {
 		case Encoding::RLE: {
 			// read length of define payload, always
-			auto def_length = *((uint32_t*) page_buf_ptr);
-			page_buf_ptr += sizeof(uint32_t);
+			uint32_t def_length;
+			memcpy(&def_length, page_buf_ptr, sizeof(def_length));
+			page_buf_ptr += sizeof(def_length);
 
 			RleBpDecoder dec((const uint8_t*) page_buf_ptr, def_length, 1);
 			dec.GetBatch<uint8_t>(defined_ptr, num_values);
@@ -554,9 +545,10 @@ public:
 			}
 
 			auto row_idx = page_start_row + val_offset;
-
-			result_arr[row_idx] = *((T*) page_buf_ptr);
+			T val;
+			memcpy(&val, page_buf_ptr, sizeof(val));
 			page_buf_ptr += sizeof(T);
+			result_arr[row_idx] = val;
 		}
 	}
 
@@ -776,7 +768,7 @@ void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 	// read entire chunk into RAM
 	pfile.seekg(chunk_start);
 	ByteBuffer chunk_buf;
-	chunk_buf.resize(chunk_len);
+	chunk_buf.resize(chunk_len );
 
 	pfile.read(chunk_buf.ptr, chunk_len);
 	if (!pfile) {
@@ -825,7 +817,7 @@ void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 			size_t decompressed_size;
 			snappy::GetUncompressedLength(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, &decompressed_size);
-			decompressed_buf.resize(decompressed_size);
+			decompressed_buf.resize(decompressed_size + 1);
 
 			auto res = snappy::RawUncompress(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, decompressed_buf.ptr);
