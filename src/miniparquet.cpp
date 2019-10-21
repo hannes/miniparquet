@@ -501,7 +501,22 @@ private:
 			auto bitpack_read_size = ((count + 31) / 32) * 32;
 			unpack_buf.resize(sizeof(T) * bitpack_read_size, false);
 
-			unpack32((uint32_t*) buffer, (uint32_t*) unpack_buf.ptr,
+			auto aligned_buffer_ptr = buffer;
+			unique_ptr<uint8_t[]> aligned_buffer;
+			size_t buffer_len = bit_width_ * count;
+
+			if ((uintptr_t)buffer % sizeof(uint32_t) != 0) {
+				size_t align_space = buffer_len + sizeof(uint32_t);
+				aligned_buffer = unique_ptr<uint8_t[]>(new uint8_t[align_space]);
+				void* p = aligned_buffer.get();
+				aligned_buffer_ptr = (const uint8_t*) align(alignof(uint32_t), buffer_len, p, align_space);
+				assert(aligned_buffer_ptr);
+				assert(align_space >= buffer_len);
+				memcpy((void*)aligned_buffer_ptr, (const void*)buffer, buffer_len);
+			}
+
+
+			unpack32((uint32_t*) aligned_buffer_ptr, (uint32_t*) unpack_buf.ptr,
 					bitpack_read_size, bit_width_);
 			memcpy(dest, unpack_buf.ptr, count * sizeof(T));
 
@@ -807,20 +822,7 @@ public:
 		page_buf_ptr += sizeof(uint8_t);
 
 		if (enc_length > 0) {
-			auto dec_buf_ptr = (const uint8_t*) page_buf_ptr;
-			unique_ptr<uint32_t[]> dec_buf;
-
-			// align buf to make fast decoder work
-			if ((uintptr_t)page_buf_ptr % sizeof(uint32_t) != 0) {
-				size_t align_space = page_buf_len + sizeof(uint32_t);
-				dec_buf = unique_ptr<uint32_t[]>(new uint32_t[align_space]);
-				void* p = dec_buf.get();
-				dec_buf_ptr = (const uint8_t*) align(alignof(uint32_t), page_buf_len, p, align_space);
-				assert(dec_buf_ptr);
-				assert(align_space >= page_buf_len);
-				memcpy((void*)dec_buf_ptr, (const void*)page_buf_ptr, page_buf_len);
-			}
-			RleBpDecoder dec( dec_buf_ptr, page_buf_len,
+			RleBpDecoder dec((const uint8_t*) page_buf_ptr, page_buf_len,
 					enc_length);
 
 			uint32_t null_count = 0;
