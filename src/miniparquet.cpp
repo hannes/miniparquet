@@ -7,7 +7,6 @@
 #include "snappy/snappy.h"
 
 #include "miniparquet.h"
-#include "bpacking.h"
 
 #include <protocol/TCompactProtocol.h>
 #include <transport/TBufferTransports.h>
@@ -333,7 +332,6 @@ private:
 	template<typename T>
 	static T bitunpack_rev(const uint8_t *source, uint64_t *source_offset,
 			uint8_t encoding_length) {
-
 		T target = 0;
 		for (auto j = 0; j < encoding_length; j++, (*source_offset)++) {
 			target |= (1 & (source[(*source_offset) / 8] >> *source_offset % 8))
@@ -342,196 +340,52 @@ private:
 		return target;
 	}
 
-	// from Lemire
-	static int unpack32(uint32_t *in, uint32_t *out, int batch_size,
-			int num_bits) {
-		batch_size = batch_size / 32 * 32;
-		int num_loops = batch_size / 32;
+	// somewhat optimized implementation that avoids non-alignment
 
-		int base = 0;
+	struct bitpack_state {
+		uint64_t bitpack_off = 0;
+		int8_t   bitpack_pos = 0;
+	};
 
-		switch (num_bits) {
-		case 0:
-			for (int i = 0; i < num_loops; ++i)
-				in = nullunpacker32(base, in, out + i * 32);
-			break;
-		case 1:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack1_32(base, in, out + i * 32);
-			break;
-		case 2:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack2_32(base, in, out + i * 32);
-			break;
-		case 3:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack3_32(base, in, out + i * 32);
-			break;
-		case 4:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack4_32(base, in, out + i * 32);
-			break;
-		case 5:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack5_32(base, in, out + i * 32);
-			break;
-		case 6:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack6_32(base, in, out + i * 32);
-			break;
-		case 7:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack7_32(base, in, out + i * 32);
-			break;
-		case 8:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack8_32(base, in, out + i * 32);
-			break;
-		case 9:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack9_32(base, in, out + i * 32);
-			break;
-		case 10:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack10_32(base, in, out + i * 32);
-			break;
-		case 11:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack11_32(base, in, out + i * 32);
-			break;
-		case 12:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack12_32(base, in, out + i * 32);
-			break;
-		case 13:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack13_32(base, in, out + i * 32);
-			break;
-		case 14:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack14_32(base, in, out + i * 32);
-			break;
-		case 15:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack15_32(base, in, out + i * 32);
-			break;
-		case 16:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack16_32(base, in, out + i * 32);
-			break;
-		case 17:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack17_32(base, in, out + i * 32);
-			break;
-		case 18:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack18_32(base, in, out + i * 32);
-			break;
-		case 19:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack19_32(base, in, out + i * 32);
-			break;
-		case 20:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack20_32(base, in, out + i * 32);
-			break;
-		case 21:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack21_32(base, in, out + i * 32);
-			break;
-		case 22:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack22_32(base, in, out + i * 32);
-			break;
-		case 23:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack23_32(base, in, out + i * 32);
-			break;
-		case 24:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack24_32(base, in, out + i * 32);
-			break;
-		case 25:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack25_32(base, in, out + i * 32);
-			break;
-		case 26:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack26_32(base, in, out + i * 32);
-			break;
-		case 27:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack27_32(base, in, out + i * 32);
-			break;
-		case 28:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack28_32(base, in, out + i * 32);
-			break;
-		case 29:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack29_32(base, in, out + i * 32);
-			break;
-		case 30:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack30_32(base, in, out + i * 32);
-			break;
-		case 31:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack31_32(base, in, out + i * 32);
-			break;
-		case 32:
-			for (int i = 0; i < num_loops; ++i)
-				in = unpack32_32(base, in, out + i * 32);
-			break;
-		default:
-			throw runtime_error("Unsupported bit packing width");
-		}
+	static const uint32_t BITPACK_MASKS[];
+	static const uint8_t BITPACK_DLEN;
 
-		return batch_size;
+	template<typename T>
+		static T bitunpack_rev2(const uint8_t* source, uint8_t encoding_length, bitpack_state* state) {
+		assert(encoding_length < 32);
+	    T val = (source[state->bitpack_off] >> state->bitpack_pos) & BITPACK_MASKS[encoding_length];
+	    state->bitpack_pos += encoding_length;
+	    while (state->bitpack_pos >= BITPACK_DLEN) {
+	        val |= (source[++state->bitpack_off] <<
+	            (BITPACK_DLEN - (state->bitpack_pos - encoding_length))) & BITPACK_MASKS[encoding_length];
+	        state->bitpack_pos -= BITPACK_DLEN;
+	    }
+	    return val;
 	}
 
-	// XXX for now we only need 1 bit to one byte for levels and n bits to 32 bit for offsets
-	//
-	// TODO this needs to check whether there is enough buffer left
+
 	template<typename T>
 	uint32_t BitUnpack(T *dest, uint32_t count) {
 
-		if (sizeof(T) == 4) {
-			// the fast unpacker needs to read 32 values at a time
-			auto bitpack_read_size = ((count + 31) / 32) * 32;
-			unpack_buf.resize(sizeof(T) * bitpack_read_size, false);
+		// uint64_t buffer_offset = 0;
 
-			auto aligned_buffer_ptr = buffer;
-			unique_ptr<uint8_t[]> aligned_buffer;
-			size_t buffer_len = bit_width_ * count;
-
-			if ((uintptr_t)buffer % sizeof(uint32_t) != 0) {
-				size_t align_space = buffer_len + sizeof(uint32_t);
-				aligned_buffer = unique_ptr<uint8_t[]>(new uint8_t[align_space]);
-				void* p = aligned_buffer.get();
-				aligned_buffer_ptr = (const uint8_t*) align(alignof(uint32_t), buffer_len, p, align_space);
-				assert(aligned_buffer_ptr);
-				assert(align_space >= buffer_len);
-				memcpy((void*)aligned_buffer_ptr, (const void*)buffer, buffer_len);
-			}
-
-
-			unpack32((uint32_t*) aligned_buffer_ptr, (uint32_t*) unpack_buf.ptr,
-					bitpack_read_size, bit_width_);
-			memcpy(dest, unpack_buf.ptr, count * sizeof(T));
-
-		} else {
-			uint64_t buffer_offset = 0;
-			for (uint32_t i = 0; i < count; i++) {
-				dest[i] = bitunpack_rev<T>(buffer, &buffer_offset, bit_width_);
-			}
-
+		bitpack_state state;
+		for (uint32_t i = 0; i < count; i++) {
+			//dest[i] = bitunpack_rev<T>(buffer, &buffer_offset, bit_width_);
+			dest[i]  = bitunpack_rev2<T>(buffer, bit_width_, &state);
 		}
 		buffer += bit_width_ * count / 8;
 		return count;
 	}
 
 };
+
+const uint32_t RleBpDecoder::BITPACK_MASKS[] = {0, 1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095,
+	    8191, 16383, 32767, 65535, 131071, 262143, 524287, 1048575, 2097151, 4194303, 8388607,
+	    16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
+
+const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
+
 
 class ColumnScan {
 public:
@@ -922,7 +776,7 @@ void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 	// read entire chunk into RAM
 	pfile.seekg(chunk_start);
 	ByteBuffer chunk_buf;
-	chunk_buf.resize(chunk_len + 32 * sizeof(uint32_t)); // extra space at the back for efficient and safe bit packing decoding
+	chunk_buf.resize(chunk_len);
 
 	pfile.read(chunk_buf.ptr, chunk_len);
 	if (!pfile) {
@@ -971,7 +825,7 @@ void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 			size_t decompressed_size;
 			snappy::GetUncompressedLength(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, &decompressed_size);
-			decompressed_buf.resize(decompressed_size + 32 * sizeof(uint32_t)); // see above
+			decompressed_buf.resize(decompressed_size);
 
 			auto res = snappy::RawUncompress(chunk_buf.ptr,
 					cs.page_header.compressed_page_size, decompressed_buf.ptr);
