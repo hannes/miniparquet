@@ -22,8 +22,9 @@ constexpr int64_t kNanosecondsInADay = kMillisecondsInADay * 1000LL * 1000LL;
 static int64_t impala_timestamp_to_nanoseconds(const Int96& impala_timestamp) {
 	int64_t days_since_epoch = impala_timestamp.value[2]
 			- kJulianToUnixEpochDays;
-	int64_t nanoseconds =
-			*(reinterpret_cast<const int64_t*>(&(impala_timestamp.value)));
+
+	int64_t nanoseconds;
+	memcpy(&nanoseconds, impala_timestamp.value, sizeof(nanoseconds));
 	return days_since_epoch * kNanosecondsInADay + nanoseconds;
 }
 

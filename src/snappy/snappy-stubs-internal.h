@@ -118,105 +118,8 @@ namespace snappy {
 static const uint32 kuint32max = static_cast<uint32>(0xFFFFFFFF);
 static const int64 kint64max = static_cast<int64>(0x7FFFFFFFFFFFFFFFLL);
 
-// Potentially unaligned loads and stores.
 
-// x86, PowerPC, and ARM64 can simply do these loads and stores native.
-
-#if defined(__i386__) || defined(__x86_64__) || defined(__powerpc__) || \
-    defined(__aarch64__)
-
-#define UNALIGNED_LOAD16(_p) (*reinterpret_cast<const uint16 *>(_p))
-#define UNALIGNED_LOAD32(_p) (*reinterpret_cast<const uint32 *>(_p))
-#define UNALIGNED_LOAD64(_p) (*reinterpret_cast<const uint64 *>(_p))
-
-#define UNALIGNED_STORE16(_p, _val) (*reinterpret_cast<uint16 *>(_p) = (_val))
-#define UNALIGNED_STORE32(_p, _val) (*reinterpret_cast<uint32 *>(_p) = (_val))
-#define UNALIGNED_STORE64(_p, _val) (*reinterpret_cast<uint64 *>(_p) = (_val))
-
-// ARMv7 and newer support native unaligned accesses, but only of 16-bit
-// and 32-bit values (not 64-bit); older versions either raise a fatal signal,
-// do an unaligned read and rotate the words around a bit, or do the reads very
-// slowly (trip through kernel mode). There's no simple #define that says just
-// “ARMv7 or higher”, so we have to filter away all ARMv5 and ARMv6
-// sub-architectures.
-//
-// This is a mess, but there's not much we can do about it.
-//
-// To further complicate matters, only LDR instructions (single reads) are
-// allowed to be unaligned, not LDRD (two reads) or LDM (many reads). Unless we
-// explicitly tell the compiler that these accesses can be unaligned, it can and
-// will combine accesses. On armcc, the way to signal this is done by accessing
-// through the type (uint32 __packed *), but GCC has no such attribute
-// (it ignores __attribute__((packed)) on individual variables). However,
-// we can tell it that a _struct_ is unaligned, which has the same effect,
-// so we do that.
-
-#elif defined(__arm__) && \
-      !defined(__ARM_ARCH_4__) && \
-      !defined(__ARM_ARCH_4T__) && \
-      !defined(__ARM_ARCH_5__) && \
-      !defined(__ARM_ARCH_5T__) && \
-      !defined(__ARM_ARCH_5TE__) && \
-      !defined(__ARM_ARCH_5TEJ__) && \
-      !defined(__ARM_ARCH_6__) && \
-      !defined(__ARM_ARCH_6J__) && \
-      !defined(__ARM_ARCH_6K__) && \
-      !defined(__ARM_ARCH_6Z__) && \
-      !defined(__ARM_ARCH_6ZK__) && \
-      !defined(__ARM_ARCH_6T2__)
-
-#if __GNUC__
-#define ATTRIBUTE_PACKED __attribute__((__packed__))
-#else
-#define ATTRIBUTE_PACKED
-#endif
-
-namespace base {
-namespace internal {
-
-struct Unaligned16Struct {
-  uint16 value;
-  uint8 dummy;  // To make the size non-power-of-two.
-} ATTRIBUTE_PACKED;
-
-struct Unaligned32Struct {
-  uint32 value;
-  uint8 dummy;  // To make the size non-power-of-two.
-} ATTRIBUTE_PACKED;
-
-}  // namespace internal
-}  // namespace base
-
-#define UNALIGNED_LOAD16(_p) \
-    ((reinterpret_cast<const ::snappy::base::internal::Unaligned16Struct *>(_p))->value)
-#define UNALIGNED_LOAD32(_p) \
-    ((reinterpret_cast<const ::snappy::base::internal::Unaligned32Struct *>(_p))->value)
-
-#define UNALIGNED_STORE16(_p, _val) \
-    ((reinterpret_cast< ::snappy::base::internal::Unaligned16Struct *>(_p))->value = \
-         (_val))
-#define UNALIGNED_STORE32(_p, _val) \
-    ((reinterpret_cast< ::snappy::base::internal::Unaligned32Struct *>(_p))->value = \
-         (_val))
-
-// TODO: NEON supports unaligned 64-bit loads and stores.
-// See if that would be more efficient on platforms supporting it,
-// at least for copies.
-
-inline uint64 UNALIGNED_LOAD64(const void *p) {
-  uint64 t;
-  memcpy(&t, p, sizeof t);
-  return t;
-}
-
-inline void UNALIGNED_STORE64(void *p, uint64 v) {
-  memcpy(p, &v, sizeof v);
-}
-
-#else
-
-// These functions are provided for architectures that don't support
-// unaligned loads and stores.
+// HM: Always use aligned load to keep ourselves out of trouble. Sorry.
 
 inline uint16 UNALIGNED_LOAD16(const void *p) {
   uint16 t;
@@ -248,7 +151,6 @@ inline void UNALIGNED_STORE64(void *p, uint64 v) {
   memcpy(p, &v, sizeof v);
 }
 
-#endif
 
 // The following guarantees declaration of the byte swap functions.
 #if defined(SNAPPY_IS_BIG_ENDIAN)

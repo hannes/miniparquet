@@ -11,7 +11,7 @@ constexpr int64_t kJulianToUnixEpochDays = 2440588LL;
 constexpr int64_t kMillisecondsInADay = 86400000LL;
 constexpr int64_t kNanosecondsInADay = kMillisecondsInADay * 1000LL * 1000LL;
 
-static int64_t impala_timestamp_to_nanoseconds(const Int96& impala_timestamp) {
+static int64_t impala_timestamp_to_nanoseconds(const Int96 &impala_timestamp) {
 	int64_t days_since_epoch = impala_timestamp.value[2]
 			- kJulianToUnixEpochDays;
 	int64_t nanoseconds =
@@ -19,7 +19,7 @@ static int64_t impala_timestamp_to_nanoseconds(const Int96& impala_timestamp) {
 	return days_since_epoch * kNanosecondsInADay + nanoseconds;
 }
 
-int main(int argc, char * const argv[]) {
+int main(int argc, char *const argv[]) {
 
 	for (int arg = 1; arg < argc; arg++) {
 		auto f = ParquetFile(argv[arg]);
@@ -33,8 +33,8 @@ int main(int argc, char * const argv[]) {
 
 		while (f.scan(s, rc)) {
 			for (uint64_t row = 0; row < rc.nrows; row++) {
-				for (auto& col : rc.cols) {
-					if (!((uint8_t*)col.defined.ptr)[row]) {
+				for (auto &col : rc.cols) {
+					if (!((uint8_t*) col.defined.ptr)[row]) {
 						printf("NULL");
 						if (col.id < rc.cols.size() - 1) {
 							printf("\t");
@@ -70,7 +70,7 @@ int main(int argc, char * const argv[]) {
 						printf("%lf", ((double*) col.data.ptr)[row]);
 						break;
 					case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
-						auto& s_ele = col.col->schema_element;
+						auto &s_ele = col.col->schema_element;
 
 						if (!s_ele->__isset.converted_type) {
 							throw runtime_error("Invalid flba type");
@@ -99,8 +99,7 @@ int main(int argc, char * const argv[]) {
 					}
 						break;
 					case parquet::format::Type::BYTE_ARRAY:
-						printf("%s",
-								((char**) col.data.ptr)[row]);
+						printf("%s", ((char**) col.data.ptr)[row]);
 
 						break;
 

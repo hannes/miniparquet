@@ -553,7 +553,6 @@ public:
 	}
 
 	void scan_data_page_plain(ResultColumn &result_col) {
-
 		// TODO compute null count while getting the def levels already?
 		uint32_t null_count = 0;
 		for (uint32_t i = 0; i < page_header.data_page_header.num_values; i++) {
@@ -563,8 +562,23 @@ public:
 		}
 
 		switch (result_col.col->type) {
-		case Type::BOOLEAN:
-			fill_values_plain<bool>(result_col);
+		case Type::BOOLEAN: {
+			// uargh, but unfortunately neccessary because sometimes bool values are > 1
+			bool *result_arr = (bool*) result_col.data.ptr;
+			for (int32_t val_offset = 0;
+					val_offset < page_header.data_page_header.num_values;
+					val_offset++) {
+
+				if (!defined_ptr[val_offset]) {
+					continue;
+				}
+
+				auto row_idx = page_start_row + val_offset;
+				result_arr[row_idx] = ((bool*)page_buf_ptr != 0);
+				page_buf_ptr += sizeof(bool);
+			}
+
+		}
 			break;
 		case Type::INT32:
 			fill_values_plain<int32_t>(result_col);
@@ -607,8 +621,8 @@ public:
 				auto row_idx = page_start_row + val_offset;
 
 				if (result_col.col->type == Type::BYTE_ARRAY) {
-					str_len = *((uint32_t*) page_buf_ptr);
-					page_buf_ptr += sizeof(uint32_t);
+					memcpy(&str_len, page_buf_ptr, sizeof(str_len));
+					page_buf_ptr += sizeof(str_len);
 				}
 
 				if (page_buf_ptr + str_len > page_buf_end_ptr) {
@@ -689,6 +703,7 @@ public:
 		}
 
 		switch (result_col.col->type) {
+		// TODO no bools here? I guess makes no sense to use dict...
 
 		case Type::INT32:
 			fill_values_dict<int32_t>(result_col, offsets.get());
@@ -768,7 +783,7 @@ void ParquetFile::scan_column(ScanState &state, ResultColumn &result_col) {
 	// read entire chunk into RAM
 	pfile.seekg(chunk_start);
 	ByteBuffer chunk_buf;
-	chunk_buf.resize(chunk_len );
+	chunk_buf.resize(chunk_len);
 
 	pfile.read(chunk_buf.ptr, chunk_len);
 	if (!pfile) {
@@ -894,7 +909,7 @@ void ParquetFile::initialize_column(ResultColumn &col, uint64_t num_rows) {
 		if (!s_ele->__isset.type_length) {
 			throw runtime_error("need a type length for fixed byte array");
 		}
-		col.data.resize(num_rows * s_ele->type_length, false);
+		col.data.resize(num_rows * sizeof(char*), false); // space for terminators ^^
 		break;
 	}
 
