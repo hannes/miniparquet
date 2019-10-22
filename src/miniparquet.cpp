@@ -49,6 +49,7 @@ void ParquetFile::initialize(string filename) {
 	pfile.open(filename, std::ios::binary);
 
 	buf.resize(4);
+	memset(buf.ptr, '\0', 4);
 	// check for magic bytes at start of file
 	pfile.read(buf.ptr, 4);
 	if (strncmp(buf.ptr, "PAR1", 4) != 0) {
