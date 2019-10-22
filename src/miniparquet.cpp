@@ -331,36 +331,28 @@ private:
 
 	// somewhat optimized implementation that avoids non-alignment
 
-	struct bitpack_state {
-		uint64_t bitpack_off = 0;
-		int8_t bitpack_pos = 0;
-	};
-
 	static const uint32_t BITPACK_MASKS[];
 	static const uint8_t BITPACK_DLEN;
 
 	template<typename T>
-	static T bitunpack_rev2(const uint8_t *source, uint8_t encoding_length,
-			bitpack_state *state) {
-		assert(encoding_length < 32);
-		T val = (source[state->bitpack_off] >> state->bitpack_pos)
-				& BITPACK_MASKS[encoding_length];
-		state->bitpack_pos += encoding_length;
-		while (state->bitpack_pos > BITPACK_DLEN) {
-			val |= (source[++state->bitpack_off]
-					<< (BITPACK_DLEN - (state->bitpack_pos - encoding_length)))
-					& BITPACK_MASKS[encoding_length];
-			state->bitpack_pos -= BITPACK_DLEN;
-		}
-		return val;
-	}
-
-	template<typename T>
 	uint32_t BitUnpack(T *dest, uint32_t count) {
-		bitpack_state state;
+		assert(bit_width_ < 32);
+
+		int8_t bitpack_pos = 0;
+		auto source = buffer;
+		auto mask = BITPACK_MASKS[bit_width_];
+
 		for (uint32_t i = 0; i < count; i++) {
-			dest[i] = bitunpack_rev2<T>(buffer, bit_width_, &state);
+			T val = (*source >> bitpack_pos) & mask;
+			bitpack_pos += bit_width_;
+			while (bitpack_pos > BITPACK_DLEN) {
+				val |= (*++source << (BITPACK_DLEN - (bitpack_pos - bit_width_)))
+						& mask;
+				bitpack_pos -= BITPACK_DLEN;
+			}
+			dest[i] = val;
 		}
+
 		buffer += bit_width_ * count / 8;
 		return count;
 	}
@@ -403,7 +395,6 @@ public:
 			((Dictionary<T>*) dict)->dict[dict_index] = val;
 		}
 	}
-
 
 	void scan_dict_page(ResultColumn &result_col) {
 		if (page_header.__isset.data_page_header
@@ -752,7 +743,6 @@ public:
 							+ type_to_string(result_col.col->type));
 		}
 	}
-
 
 	// ugly but well
 	void cleanup(ResultColumn &result_col) {
